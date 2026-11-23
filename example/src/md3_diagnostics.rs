@@ -123,7 +123,6 @@ fn observe_bounds(name: &'static str, observations: Arc<DiagnosticBounds>) -> Mo
     })
 }
 
-/// Renders isolated, opaque color patches and an unmodified collapsed rail.
 #[tessera]
 pub(crate) fn diagnostic_app(
     #[prop(skip_eq)] bounds: Arc<DiagnosticBounds>,

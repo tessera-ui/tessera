@@ -166,19 +166,16 @@ fn cell(dark: bool, selected: bool, column: usize) {
         [
             (
                 "v0",
-                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                    .into(),
+                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
             ),
-            ("v1", I18N.text(&(LABELS[column])).into()),
+            ("v1", I18N.text(LABELS[column]).into()),
             (
                 "v2",
-                I18N.text(
-                    &(if selected {
-                        "ui-selected-7075"
-                    } else {
-                        "ui-unselected-7076"
-                    }),
-                )
+                I18N.text(if selected {
+                    "ui-selected-7075"
+                } else {
+                    "ui-unselected-7076"
+                })
                 .into(),
             ),
         ],

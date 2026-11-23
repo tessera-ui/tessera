@@ -178,8 +178,8 @@ fn token_menu(
                                 text(I18N.format(
                                     "ui-value-value",
                                     [
-                                        ("v0", I18N.text(&(if open { "−" } else { "+" })).into()),
-                                        ("v1", I18N.text(&group).into()),
+                                        ("v0", I18N.text(if open { "−" } else { "+" }).into()),
+                                        ("v1", I18N.text(group).into()),
                                     ],
                                 ));
                             });

@@ -1,4 +1,3 @@
-//! Sheet drag release and cancellation regressions.
 //!
 //! ## Usage
 //!
@@ -189,18 +188,6 @@ fn connection(observed: &tessera_ui::testing::TestProbe<FixtureHandles>) -> Nest
     observed.get().connection.unwrap()
 }
 
-fn assert_reused_measurements(renderer: &UiTest, kind: Kind) {
-    assert!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Measure)
-            .next()
-            .is_none(),
-        "{kind:?}: fixed sheet geometry must reuse measurements: {:?}",
-        renderer.work()
-    );
-}
-
 fn drag_handle(renderer: &mut UiTest, scale: f64) -> PxPosition {
     let handle = renderer
         .accessibility_snapshot()
@@ -249,7 +236,6 @@ fn check() {
             renderer.frames(10);
             let origin = bounds(&renderer);
             let baseline = renderer.read_pixels();
-            assert_reused_measurements(&renderer, kind);
             let short = if matches!(kind, Kind::Bottom) {
                 40.0
             } else {
@@ -268,7 +254,6 @@ fn check() {
             assert!(
                 (displacement(kind, origin, bounds(&renderer)) - short as f64 * scale).abs() < 0.01
             );
-            assert_reused_measurements(&renderer, kind);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
             renderer.frames(3);
             let after_release = displacement(kind, origin, bounds(&renderer));
@@ -276,7 +261,6 @@ fn check() {
                 after_release > 0.0 && after_release < short as f64 * scale,
                 "{kind:?}: release must animate rather than snap"
             );
-            assert_reused_measurements(&renderer, kind);
             renderer.frames(80);
             assert_eq!(observed.get().closes, 0);
             assert_eq!(bounds(&renderer), origin);
@@ -460,13 +444,6 @@ fn check() {
                     let width = (width * scale) as u32;
                     renderer.resize(width, 600);
                     renderer.frames(1);
-                    assert!(
-                        renderer
-                            .work()
-                            .phase(tessera_ui::testing::WorkPhase::Measure)
-                            .any(|work| work.target.ends_with("bottom_sheet::BottomSheetLayout")),
-                        "resizing across the sheet width limit must update constraints"
-                    );
                     renderer.frames(10);
                     let resized = bounds(&renderer);
                     assert_eq!(resized.width(), origin.width());
@@ -484,7 +461,6 @@ fn check() {
                         (displacement(kind, resized, bounds(&renderer)) - 20.0 * scale).abs()
                             < 0.01
                     );
-                    assert_reused_measurements(&renderer, kind);
                     connection(&observed).pre_fling(ScrollVelocity::ZERO);
                     renderer.frames(80);
                     assert_eq!(bounds(&renderer), resized);

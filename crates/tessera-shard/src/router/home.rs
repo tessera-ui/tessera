@@ -4,40 +4,13 @@ use tessera_ui::{State, provide_context, remember, tessera};
 
 use crate::router::{RouterController, RouterDestination, back::route_display};
 
-/// # shard_home
+/// Mounts a router at the app root and renders its active destination.
 ///
-/// Provide a router to shard pages and render the active destination.
-///
-/// ## Usage
-///
-/// Mount the root route for an app shell.
 /// On Android, system back pops one route and a predictive gesture previews
 /// the previous route. Android handles back at the root of the stack.
 ///
-/// ## Parameters
-///
-/// - `root` — initial destination used when `controller` is omitted
-/// - `controller` — optional external router controller state; descendants
-///   read it with [`crate::use_router`]
-///
-/// ## Examples
-///
-/// ```rust
-/// use tessera_shard::{RouterController, shard, shard_home, use_router};
-/// use tessera_ui::tessera;
-///
-/// #[shard]
-/// fn home_page() {
-///     assert_eq!(use_router().with(RouterController::len), 1);
-/// }
-///
-/// #[tessera]
-/// fn app() {
-///     shard_home().root(HomePageDestination {});
-/// }
-///
-/// tessera_ui::testing::UiTest::new().content(app).frame();
-/// ```
+/// Set `.root(...)` to the initial destination unless supplying a controller.
+/// Pages can access the controller with [`crate::use_router`].
 #[tessera]
 pub fn shard_home(
     #[prop(skip_setter)] root: Option<Rc<dyn RouterDestination>>,

@@ -794,8 +794,6 @@ impl RenderCore {
             .create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    /// Resize the surface
-    /// Real resize will be done in the next frame, in [Self::resize_if_needed]
     pub(crate) fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
         if self.size == size {
             return;
@@ -804,15 +802,10 @@ impl RenderCore {
         self.size_changed = true;
     }
 
-    /// Get the size of the surface
     pub(crate) fn size(&self) -> winit::dpi::PhysicalSize<u32> {
         self.size
     }
 
-    /// Applies the pending surface/target resize.
-    ///
-    /// When a swapchain surface is present it is reconfigured; offscreen cores
-    /// only rebuild their render targets.
     pub(crate) fn resize_surface(&mut self) {
         self.apply_resize(true);
     }
@@ -838,10 +831,10 @@ impl RenderCore {
             let configure = force || self.config.width != width || self.config.height != height;
             self.config.width = width;
             self.config.height = height;
-            if let Some(surface) = &self.surface {
-                if configure {
-                    surface.configure(&self.device, &self.config);
-                }
+            if let Some(surface) = &self.surface
+                && configure
+            {
+                surface.configure(&self.device, &self.config);
             }
             self.rebuild_pass_targets(force);
         }
@@ -909,7 +902,6 @@ impl RenderCore {
         }
     }
 
-    /// Resize the surface if needed.
     pub(crate) fn resize_if_needed(&mut self) {
         if self.size_changed {
             self.apply_resize(false);

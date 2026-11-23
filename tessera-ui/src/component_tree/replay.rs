@@ -1,9 +1,3 @@
-//! Consumer ancestry across retained component replay.
-//!
-//! ## Usage
-//!
-//! Preserve interaction and semantics when retained controls move.
-
 use rustc_hash::FxHashMap as HashMap;
 use smallvec::SmallVec;
 

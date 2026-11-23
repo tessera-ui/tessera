@@ -44,8 +44,8 @@ cargo tessera headless -p my-app --profiling-output target/headless.jsonl
 cargo tessera profiling analyze target/headless.jsonl --top 30
 ```
 
-Pass `--debug-dirty-overlay` to desktop `dev` or `build` to display dirty replay
-regions. Profiling reports component build, layout, render preparation, encoding,
-and submission CPU costs. Set `TESSERA_GPU_TIMING=1` for supported native windowed
-or offscreen GPU timestamp capture. That mode waits for readback each frame, so measure frame cadence in a separate
-run with GPU timing disabled.
+Pass `--debug-dirty-overlay` to desktop `dev` or `build` to highlight areas
+updated after a change. Profiling reports component, layout, and rendering costs.
+Set `TESSERA_GPU_TIMING=1` for supported native windowed or offscreen GPU timing;
+GPU timing adds overhead, so measure frame cadence in a separate run with it
+disabled.

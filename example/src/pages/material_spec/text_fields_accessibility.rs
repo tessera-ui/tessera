@@ -184,7 +184,7 @@ fn callout(x: f64, y: f64, width: f64, height: f64, label: String, role: String,
                 .children(move || {
                     text(I18N.text("ui-label")).style(type_style(14.0 * scale, 18.0 * scale));
                     text(I18N.text(&(label)))
-                        .style(emphasis.clone())
+                        .style(emphasis)
                         .color(srgb(132, 69, 143));
                     gap(Dp(12.0 * scale));
                     text(I18N.text("ui-role")).style(type_style(14.0 * scale, 18.0 * scale));

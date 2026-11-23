@@ -553,7 +553,7 @@ fn time_color_pair(input: bool) {
                             "ui-time-picker-value-color-roles",
                             [(
                                 "v0",
-                                I18N.text(&(if input { "ui-input-7117" } else { "ui-dial" }))
+                                I18N.text(if input { "ui-input-7117" } else { "ui-dial" })
                                     .into(),
                             )],
                         ),
@@ -583,24 +583,20 @@ fn time_color_pair(input: bool) {
                                                 [
                                                     (
                                                         "v0",
-                                                        I18N.text(
-                                                            &(if dark {
-                                                                "ui-dark"
-                                                            } else {
-                                                                "ui-light"
-                                                            }),
-                                                        )
+                                                        I18N.text(if dark {
+                                                            "ui-dark"
+                                                        } else {
+                                                            "ui-light"
+                                                        })
                                                         .into(),
                                                     ),
                                                     (
                                                         "v1",
-                                                        I18N.text(
-                                                            &(if input {
-                                                                "ui-input-7117"
-                                                            } else {
-                                                                "ui-dial"
-                                                            }),
-                                                        )
+                                                        I18N.text(if input {
+                                                            "ui-input-7117"
+                                                        } else {
+                                                            "ui-dial"
+                                                        })
                                                         .into(),
                                                     ),
                                                 ],
@@ -617,7 +613,7 @@ fn time_color_pair(input: bool) {
             "ui-time-picker-value-color-roles-used-for-light-and-dark-themes",
             [(
                 "v0",
-                I18N.text(&(if input { "ui-input-7117" } else { "ui-dial" }))
+                I18N.text(if input { "ui-input-7117" } else { "ui-dial" })
                     .into(),
             )],
         ),
@@ -1280,13 +1276,11 @@ fn time_figure_contents(
                                     ("v0", I18N.text(&label).into()),
                                     (
                                         "v1",
-                                        I18N.text(
-                                            &(if input {
-                                                "ui-switch-to-dial"
-                                            } else {
-                                                "ui-switch-to-time-input-7120"
-                                            }),
-                                        )
+                                        I18N.text(if input {
+                                            "ui-switch-to-dial"
+                                        } else {
+                                            "ui-switch-to-time-input-7120"
+                                        })
                                         .into(),
                                     ),
                                 ],

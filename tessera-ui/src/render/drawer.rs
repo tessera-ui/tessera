@@ -10,7 +10,6 @@ pub use pipeline::{DrawContext, DrawablePipeline, FrameContext, PipelineRegistry
 
 pub(crate) use pipeline::ErasedDrawContext;
 
-/// Drawer manages graphics pipelines and processes draw commands.
 #[derive(Default)]
 pub(crate) struct Drawer {
     /// Registry containing all registered graphics pipelines

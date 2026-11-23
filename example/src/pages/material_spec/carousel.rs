@@ -613,7 +613,7 @@ fn carousel_content(
                         )
                         .accessibility_label(I18N.format(
                             "ui-value-collections",
-                            [("v0", I18N.text(&name(variant)).into())],
+                            [("v0", I18N.text(name(variant)).into())],
                         ))
                         .content(move |item| {
                             let modifier = if let Some(geometry) = geometry {
@@ -769,16 +769,14 @@ fn layout_figure(
                         I18N.format(
                             "ui-value-value-figure",
                             [
-                                ("v0", I18N.text(&name(variant)).into()),
+                                ("v0", I18N.text(name(variant)).into()),
                                 (
                                     "v1",
-                                    I18N.text(
-                                        &(if measurements {
-                                            "ui-measurement-7071"
-                                        } else {
-                                            "ui-anatomy-7072"
-                                        }),
-                                    )
+                                    I18N.text(if measurements {
+                                        "ui-measurement-7071"
+                                    } else {
+                                        "ui-anatomy-7072"
+                                    })
                                     .into(),
                                 ),
                             ],
@@ -897,7 +895,7 @@ fn carousel_annotation_content(values: Geometry, measurements: bool, variant: Ca
                     "ui-value-value-format-2",
                     [
                         ("v0", format!("{:.0}", padding).into()),
-                        ("v1", I18N.text(&edge).into()),
+                        ("v1", I18N.text(edge).into()),
                     ],
                 ),
                 Dp(label_x),

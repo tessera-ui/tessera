@@ -2,118 +2,37 @@
 
 ### Breaking changes
 
-- **Renamed from `tessera-ui-basic-components`.** Update the dependency and
-  import paths:
-
-  ```toml
-  # before
-  tessera-ui-basic-components = "2"
-  # after
-  tessera-components = "3"
-  ```
-
-  `tessera_ui_basic_components::*` becomes `tessera_components::*`.
-- **Material components moved to `tessera_components::md3`.** The crate root
-  keeps design-system-independent primitives (`row`, `column`, `boxed`,
-  `flow_row`, `flow_column`, `spacer`, `image`, `image_vector`, `pager`,
-  `painter`, `alignment`, `shape_def`). Buttons, text, icons, surfaces, theme,
-  scrolling, lazy lists, text input, and all other Material components are
-  imported from `md3`, for example `tessera_components::md3::button::button`.
-- **Register the package at the entry.** Replace
-  `pipelines::register_pipelines(registry)` with
-  `EntryPoint::new(app).package(tessera_components::ComponentsPackage)`, which
-  also registers the platform clipboard.
-- **Builder APIs.** Components follow the Tessera 3 component model: required
-  values are entry arguments and options are chained setters instead of
-  `*Args` structs and `*ArgsBuilder`s.
-
-  ```rust
-  // 2.x
-  text(TextArgsBuilder::default().text("Hi".to_string()).size(Dp(12.0)).build().unwrap());
-  // 3.0
-  text("Hi").size(Dp(12.0));
-  ```
-
-  Sizing and padding fields (`width`, `height`, `padding`) are replaced by
-  modifiers.
-- **Controls take their value at entry.** `checkbox(checked)`,
-  `switch(checked)`, `radio_button(selected)`, `slider(value)`,
-  `range_slider(value)`, and `tabs(selected)` take the current value and
-  report changes through `on_toggle`, `on_select`, or `on_change` callbacks;
-  `CheckboxState`, `SwitchState`, `SliderState`, and `TabsState` are removed.
-  Remaining imperative state holders are named `*Controller` (for example
-  `ScrollableState` → `ScrollableController`, `DialogProviderState` →
-  `DialogController`) and are optional: components create one internally
-  when none is passed.
-- **Theming.** Colors, typography, and shapes come from a single
-  `md3::theme::MaterialTheme` provided by `material_theme()`
-  (`MaterialTheme::from_seed` and `from_color_scheme` build custom themes).
-  The `material_color` module and `global_material_scheme` are removed.
-- **Modifiers.** Layout, semantics, and generic visual modifiers (`padding`,
-  `size`, `fill_*`, `alpha`, `clip_shape`, ...) come from
-  `tessera_foundation::modifier::ModifierExt`.
-  Generic interaction modifiers (`clickable`, `combined_clickable`,
-  `toggleable`, `selectable`, and `draggable`) and `InteractionState` also
-  belong to `tessera_foundation::modifier`; the
-  `tessera_components::interaction_state` module is removed.
-  `tessera_components::modifier::ModifierExt` provides drawing extensions
-  only (backgrounds and borders); scrolling and Material shadows come from
-  `md3::modifier::ModifierExt`. Foundation interaction modifiers do not add
-  Material ripples; use Material controls or supply custom visual feedback.
-- **Removed and replaced components.** `text_editor` is replaced by
-  `md3::text_input` and `md3::text_field`; `bottom_nav_bar` by
-  `md3::navigation_bar`; `side_bar` is removed (use `md3::navigation_drawer`
-  or `md3::side_sheet`). `fluid_glass` became the experimental
-  `experiment::hig::glass::glass`, which no longer reads the Material theme;
-  `glass_button`, `glass_progress`, `glass_slider`, and `glass_switch` are
-  removed. The root `RippleState` re-export is removed (use
-  `md3::ripple_state`).
-- **Fonts.** Text uses the platform's system fonts instead of bundled fonts.
-  Register `fonts::Fonts` for packaged fonts, or `fonts::FontStylesheet` for a
-  web font stylesheet; web builds bundle a startup font and load more from a
-  CDN.
-- **Images.** Images load asynchronously from generated assets or in-memory
-  bytes through `painter`; synchronous `raster` / `vector` / `try_painter`
-  loaders are removed.
+- **Package and module paths changed.** Depend on `tessera-components` and
+  import Material components from `tessera_components::md3`; the crate root
+  contains design-system-independent primitives.
+- **Components use named props and builder handles.** Required values are
+  passed at entry; optional values use named setters. Controls take their value
+  at entry and report changes through callbacks.
+- **The Material theme is explicit.** Provide `md3::theme::MaterialTheme` with
+  `material_theme()`; visual defaults no longer come from a global color scheme.
+- **Modifiers have separate owners.** Generic layout, semantics, and interaction
+  modifiers come from `tessera-foundation`; Material scrolling and elevation
+  remain in `md3`.
+- **Components were renamed or removed.** Text editing uses `md3::text_input` or
+  `md3::text_field`; navigation and glass components use their new `md3` or
+  experimental HIG paths.
+- **Fonts and images load through the supported resource APIs.** Text uses
+  platform fonts by default; images load asynchronously from generated assets
+  or in-memory bytes.
 
 ### Added
 
-- Material Design 3 components: app bars, badges, button groups, cards,
-  carousels, chips, date and time pickers, dialogs, dividers, floating action
-  buttons and menus, lazy grids and staggered grids, list items, loading and
-  wavy progress indicators, menus, navigation bars, drawers, and rails, pull to
-  refresh, radio buttons, scaffold, search, segmented and split buttons, side
-  and bottom sheets, snackbars, text fields, text tables, toolbars, and
-  tooltips.
-- Layout primitives `flow_row`, `flow_column`, and `pager`, and keyed items in
-  `md3` lazy lists and grids.
-- Vertical sliders, discrete steps, and range and centered sliders.
-- Typography with font family, weight, tracking, line height, and
-  single-line ellipsizing.
-- Built-in component labels are localized (English and Simplified Chinese)
-  and follow the language registered at the entry.
-- Keyboard focus, focus indicators, and accessibility semantics across
-  components.
-- `experiment::hig::glass::glass` with Regular, Clear, and Custom liquid glass
-  materials.
+- Material Design 3 components for navigation, forms, overlays, progress,
+  selection, and text entry.
+- Flow layouts, pagers, lazy grids, and keyed lazy-list items.
+- Custom typography, localized component labels, keyboard focus, and
+  accessibility semantics.
+- Experimental liquid-glass materials under `experiment::hig`.
 
 ### Fixed
 
-- Text-field context menus open on completed right clicks and long presses,
-  remain open through release, and tolerate small pointer movements without
-  treating drags as clicks. Focused editors no longer swallow the menu trigger.
-- Menus dismiss when focus leaves their scope, including text-field context menus.
-- Fixed-height multiline text fields use the full content area and keep the
-  indicator at the bottom of the field.
-
-### Performance
-
-- Shadows are drawn analytically in the shape pipeline without offscreen
-  textures or blur passes.
-- Text measurement reuses shaped glyph runs when only constraints change, and
-  the system font scan runs in the background at startup.
-- Pipelines are created on first use, and vector icons rasterize in the frame
-  submission with retained atlas entries.
+- Text-field context menus respond consistently to right clicks and long
+  presses, dismiss when focus leaves, and support fixed-height multiline fields.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.7.0...tessera-components-v3.0.0)
 
@@ -121,13 +40,7 @@
 
 ### Changes
 
-- feat: Refactor pipeline traits to use context structs
-- feat(pipeline): add pipeline cache support
-- chore(deps): bump image from 0.25.8 to 0.25.9
-- refactor(text_editor): Replace TextEditorStateHandle with TextEditorState
-- refactor: Replace Arc wrappers with direct struct usage for state management in various components
-- Revert "fix(lazy_list): Improve viewport span calculation for lazy lists during resize"
-- fix(lazy_list): Improve viewport span calculation for lazy lists during resize
+- Lazy lists now handle viewport resizing correctly.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.6.0...tessera-ui-basic-components-v2.7.0)
 
@@ -135,18 +48,11 @@
 
 ### Changes
 
-- feat(tessera-ui-basic-components): Refactor docs and unify state management
-- feat: add lazy lists and integrate example
-- refactor: organize basic component pipelines
+- Added lazy lists.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.5.1...tessera-ui-basic-components-v2.6.0)
 
 ## [v2.5.1] - 2025-11-15 +08:00
-
-### Changes
-
-- Merge pull request #80 from tessera-ui/dependabot/cargo/lyon_geom-1.0.18
-- chore(deps): bump lyon_geom from 1.0.17 to 1.0.18
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.5.0...tessera-ui-basic-components-v2.5.1)
 
@@ -154,22 +60,8 @@
 
 ### Changes
 
-- fix: remove redundant srgb decode in atlas sample
-- feat(fluid_glass): Optimize dispersion effect and performance
-- feat(blur): add downscale factor calculation for blur radius
-- style: format codes
-- perf(blur): smallvec-backed weight generation
-- perf(blur): reuse intermediate textures
-- feat: add vector atlas pipeline
-- fix: stabilize fluid glass border highlight
-- fix: adjust chroma_multiplier default value for fluid_glass and glass_button components
-- feat: Use Dp for fluid_glass dimension parameters
-- fix(compute): fix scheduling bug in compute pipeline
-- perf(renderer): add separate sampling/collision padding for barrier batching
-- perf(blur): optimize gaussian blur sampling
-- refactor: clean up incomplete documentation comments
-- fix(a11y): merge accessibility handler into main input handler to preserve block_input behavior
-- feat(a11y): add comprehensive accessibility support to UI components
+- Added accessibility support for component controls.
+- Vector images and refined fluid-glass effects are available.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.4.0...tessera-ui-basic-components-v2.5.0)
 
@@ -177,10 +69,7 @@
 
 ### Changes
 
-- feat: add icon button wrappers and showcases
-- feat: add icon component and update related examples and documentation
-- fix(image_vector): use premultiplied output + premultiplied blending to avoid SVG rendering whitening
-- feat: add image vector component
+- Added icon and vector-image components.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.3.0...tessera-ui-basic-components-v2.4.0)
 
@@ -188,11 +77,7 @@
 
 ### Changes
 
-- perf(cache): add heat tracking to prevent caching transient shapes
-- feat(fluid_glass): enhance blend_overlay function with multiply and screen modes
-- perf(fluid_glass): cache sdf generation
-- perf(fluid_glass): short-circuit plain rectangles
-- perf(blur): leverage hardware filtering for scale passes
+- Fluid glass supports multiply and screen blend modes.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.2.0...tessera-ui-basic-components-v2.3.0)
 
@@ -200,32 +85,8 @@
 
 ### Changes
 
-- fix(ui): align shape cache alpha handling
-- feat: Batch cached shape draws
-- build(deps): update deps
-- perf(blur): restructure pipeline around dual pass
-- feat(compute): copy scene before blur dispatch
-- feat(blur): add downscaled sampling option
-- fix(blur): restore fallback copy outside target area
-- feat(renderer/compute): batch compute dispatch support
-- perf: Adjust worker thread scope to reduce blur overhead
-- feat: Optimize mobile touch
-- style: format code
-- perf(shape): adjust cache
-- perf(basic-components): cache large rects and use simple rect pipeline
-- fix(fluid_glass): Fix abnormal black edge refraction
-- perf: Replace full-screen SDF and GPU vertex generation in shape pipeline with local SDF and draw_indexed instanced rendering
-- chore(deps): bump lru from 0.16.1 to 0.16.2
-- feat(boxed): Support specifying independent alignment for child components
-- feat(alignment): change alignment default value to TopStart and fix test cases
-- fix(fluid_glass): Fix vertex data inconsistency issue introduced by f1b057c2153a7d8e218f6dc05cbfcc128b128fa8
-- build(deps): update dependencies
-- feat(dialog): add configurable padding parameter
-- Merge pull request #63 from tessera-ui/dependabot/cargo/bytemuck-1.24.0
-- chore(deps): bump parking_lot from 0.12.4 to 0.12.5
-- chore(deps): bump bytemuck from 1.23.2 to 1.24.0
-- fix(fluid_glass): wrong refraction
-- chore(deps): bump glam from 0.30.6 to 0.30.7
+- Added independent child alignment and configurable dialog padding.
+- Improved touch responsiveness and fluid-glass rendering.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.1.0...tessera-ui-basic-components-v2.2.0)
 
@@ -233,16 +94,11 @@
 
 ### Changes
 
-- feat(renderer): add register_draw_pipeline/register_compute_pipeline and update call sites
-- chore(deps): bump glam from 0.30.5 to 0.30.6
-- refactor(tessera-ui-basic-components): simplify was_pressed_left invocation
+- Draw and compute pipelines can be registered directly with the renderer.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.0.0...tessera-ui-basic-components-v2.1.0)
 
 ## [v2.0.0] - 2025-09-17 +08:00
-
-### Changes
-
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.15.0...tessera-ui-basic-components-v2.0.0)
 
@@ -250,8 +106,7 @@
 
 ### Changes
 
-- feat(shape_def): change RoundedRectangle corner radii to Dp
-- feat(side-bar): add blur effect to side bar content wrapper
+- Rounded rectangle corner radii use `Dp`; the side bar supports blur.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.14.0...tessera-ui-basic-components-v1.15.0)
 
@@ -259,26 +114,12 @@
 
 ### Changes
 
-- fix(text-editor): add default implementation for TextEditorArgs to fix doc test
-- feat(text-editor): add on_change callback and safe action handling
-- feat(checkbox): make CheckboxState fields private and add constructor
-- docs(image): update example to use `no_run` for better clarity
-- docs(column): update example to include SpacerArgs for clarity
-- docs(text): add spacing for example section
-- docs(slider): update example documentation
+- Text editors report content changes through a callback.
+- Checkboxes have a public constructor for their state.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.13.1...tessera-ui-basic-components-v1.14.0)
 
 ## [v1.13.1] - 2025-09-13 +08:00
-
-### Changes
-
-- refactor(input-handler): rename state_handler → input_handler across code and docs
-- docs(surface): make example tested
-- docs(tessera-ui-basic-components): add tabs component docs
-- docs(side_bar): add API docs, examples and doc comments for side_bar_provider
-- docs(glass_switch): update usage reference in documentation
-- docs(tessera-ui-basic-components): add README files and fix macros docs formatting
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.13.0...tessera-ui-basic-components-v1.13.1)
 
@@ -286,32 +127,9 @@
 
 ### Changes
 
-- feat(basic-components,example)!: rework tabs to external state and add Tabs showcase
-- feat(basic-components,example)!: rework switch to external state and add Switch showcase
-- refactor(scrollbar): simplify width and height handling in render functions
-- feat(surface): add setter for width and height in SurfaceArgs
-- feat(spacer): add setter for width and height in SpacerArgs
-- feat(basic-components, example)!: make width/height non-optional DimensionValue and update examples
-- feat(basic-components, example)!: rework Glass Switch to external state; add showcase and navigation
-- refactor(basic-components)!: internalize text edit core; tidy rustdoc
-- chore(deps): bump lru from 0.16.0 to 0.16.1
-- feat(renderer, basic-components, example)!: propagate clip-aware drawing and clamp Fluid Glass sampling
-- feat(image, example)!: add Fluid Glass demo and switch Image data to Arc<ImageData> ([#49](https://github.com/tessera-ui/tessera/issues/49))
-- feat(dialog): enhance shadow properties for dialog content
-- fix(docs): align checkbox and checkmark doc tests with API changes
-- feat(dialog, example)!: integrate Dialog provider and add demo (#49)
-- refactor(checkbox)!: require explicit state; remove legacy args; add example (#49)
-- feat(example): complete column/row/boxed showcase planned in #49
-- fix(test): update examples to new Router API and clean up docs
-- refactor(example): rework(ing) demos to better showcase components and updated APIs
-- perf(text): add LRU cache to reuse TextData and reduce buffer rebuild cost
-- fix(scrollable, surface): enhance constraint merging and child measurement logic
-- feat(bottom_nav_bar): prevent unnecessary state updates on navigation item click
-- feat(text): add None option for aligment in TextData
-- build(deps): update glyphon-tessera-fork to version 0.9.4
-- feat(button, bottom_nav_bar): integrate shadow properties for enhanced visual feedback
-- feat(button): add shadow property to ButtonArgs with strip option
-- refactor(surface): update shadow property to strip option in SurfaceArgs
+- Tabs and switches take their state from the application.
+- Clipping applies to custom drawing and fluid-glass effects.
+- Dialogs support configurable visual feedback and explicit control state.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.12.0...tessera-ui-basic-components-v1.13.0)
 
@@ -319,10 +137,7 @@
 
 ### Changes
 
-- docs(basic-components): refine rustdoc, unify intra-doc links, add module docs, tidy examples
-- feat(components): add SideBar component
-- fix(padding-utils): correct min constraint adjustment for wrap dimensions and relocate tessera attribute
-- style(bottom-nav-bar): format imports and docs(router) comment wrapping
+- Added the side bar component.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.11.0...tessera-ui-basic-components-v1.12.0)
 
@@ -330,23 +145,15 @@
 
 ### Changes
 
-- feat(animation): add easing-based selection transition to bottom nav bar
-- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
+- Added an animated bottom navigation component and simplified routing.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.10.2...tessera-ui-basic-components-v1.11.0)
 
 ## [v1.10.2] - 2025-09-05 +08:00
 
-### Changes
-
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.10.1...tessera-ui-basic-components-v1.10.2)
 
 ## [v1.10.1] - 2025-09-04 +08:00
-
-### Changes
-
-- fix(fluid_glass): relax FluidGlassArgs equality by ignoring on_click callback pointer
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.10.0...tessera-ui-basic-components-v1.10.1)
 
@@ -354,29 +161,11 @@
 
 ### Changes
 
-- perf(renderer): add dirty frame detection and dynamic command equality
-- style(text_editor): reorder and deduplicate imports
-- Fix Imports
-- Update Doc Comments
-- Update Text Editor & Core
-- feat(tessera-ui-basic-components): add Tabs component and example
-- perf(tessera-ui-basic-components): batch child measurements to use measure_children
-- docs(tessera-ui-basic-components): update examples to scoped child API
-- feat(tessera-ui-basic-components): introduce scoped child API and update examples
-- refactor(logging): replace log/flexi_logger/android_logger with tracing
-- chore(deps): bump encase from 0.11.1 to 0.11.2
+- Added the tabs component.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.9.1...tessera-ui-basic-components-v1.10.0)
 
 ## [v1.9.1] - 2025-08-26 +08:00
-
-### Changes
-
-- refactor(ui): simplify conditional checks in keyboard event handlers and state updates
-- refactor(image, constraint): replace to_max_px with get_max for constraint handling
-- fix(bottom-sheet): simplify child measurement logic and remove unnecessary constraints
-- chore: add new line in changelog sections for better readability
-- fix(text-editor/renderer): improve text selection rendering and clipping system
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.9.0...tessera-ui-basic-components-v1.9.1)
 
@@ -384,17 +173,8 @@
 
 ### Changes
 
-- feat(text-editor): replace line-based scrolling with smooth pixel-based scrolling
-- refactor: optimize loop logic and condition checks
-- fix(tessera-ui-basic-components): enforce Fill constraint handling and fix row/column/dialog layout logic
-- fix(switch): restore correct on_toggle behavior and stabilize state handling
-- fix(pipelines): correct x-coordinate sign in pixel_to_ndc function
-- docs(pipelines): remove example from pixel_to_ndc doc comment
-- refactor(renderer, components): extract helpers and simplify rendering/compute flow
-- fix(fluid_glass): change cursor event from pressed to released
-- feat(fluid_glass): support independent corner radii
-- feat(bottom_sheet): introduce glass style for scrim
-- refactor(dialog): unify glass dialog and introduce dialog styles
+- Text editors scroll smoothly by pixel position.
+- Bottom sheets support glass styling; fluid-glass shapes support independent corners.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.8.0...tessera-ui-basic-components-v1.9.0)
 
@@ -402,45 +182,19 @@
 
 ### Changes
 
-- refactor(fluid_glass): optimize border anti-aliasing and highlight logic
-- docs(shape): update examples to reflect independent corner radii API
-- fix(renderer): correct clip command handling logic
-- feat(components): introduce BottomSheet and independent corner radii
-- feat(clip): implement component clipping to prevent content overflow
-- fix(pipelines/text): fix doctest type errors in TextData example for Color and TextConstraint
-- refactor(renderer,pipelines,logo): unify import order, optimize pipeline interfaces for batched command processing, simplify logo component structure
-- perf(renderer): refactor rendering pipeline interfaces for batched command processing and optimize dependency graph rules
-- perf(pipelines/shape): optimize shape rendering pipeline with instance-based uniforms and batched draw, update WGSL for multi-instance support
-- perf(text-pipeline): optimize GlyphonTextRender with batched command collection and improved renderer reuse
-- perf(renderer): batch draw commands and optimize fluid_glass pipeline
-- perf(pipelines/fluid_glass): optimize FluidGlassPipeline with dynamic uniform buffer offset, improve multi-component rendering performance.
-- chore(deps): bump bytemuck from 1.23.1 to 1.23.2
+- Added bottom sheets, independent corner radii, and component clipping.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.7.1...tessera-ui-basic-components-v1.8.0)
 
 ## [v1.7.1] - 2025-08-08 +08:00
 
-### Changes
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.7.0...tessera-ui-basic-components-v1.7.1)
 
 ## [v1.7.0] - 2025-08-08 +08:00
 
-### Changes
-
-- perf(renderer): replace manual padding with zero padding for FluidGlassCommand barrier
-- fix(checkbox): correct typo in documentation comment for CheckmarkState
-- perf(renderer): implement instruction reordering and scoped compute
-- perf(renderer): implement scissor and batching for barrier commands
-- feat(macros, shard): introduce declarative client-side routing
-- feat(shard, macros): introduce shard state management and re-export macros
-- feat(fluid_glass): update example to use image background with Builder API, set default noise_amount to 0.0
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.6.1...tessera-ui-basic-components-v1.7.0)
 
 ## [v1.6.1] - 2025-08-03 +08:00
-
-### Changes
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.6.0...tessera-ui-basic-components-v1.6.1)
 
@@ -448,10 +202,7 @@
 
 ### Changes
 
-- fix(tessera-ui-basic-components): include descender in text layout height calculation
-- feat(tessera-ui-basic-components): use Dp for borders, add max_blur_radius & overlay blend highlight, update examples
-- feat(glass_progress): add glassmorphism-style progress bar component and showcase example
-- refactor(fluid_glass): enhance shape rendering and border highlight effects
+- Added a glass progress component and configurable glass borders.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.5.0...tessera-ui-basic-components-v1.6.0)
 
@@ -459,11 +210,7 @@
 
 ### Changes
 
-- refactor(progress): optimize progress bar visual design by removing shape parameter and implementing height-based auto rounded corners
-- feat(fluid_glass): add contrast property and set default tint to transparent
-- refactor(glass_slider): use fluid_glass for progress indicator
-- feat(glass-components): enhance border rendering with 3D bevel highlight
-- refactor(glass_dialog_showcase,glass_dialog): optimize glass dialog and button visual parameters, remove blur_radius field for simpler configuration
+- Refined progress indicators and glass component borders.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.4.0...tessera-ui-basic-components-v1.5.0)
 
@@ -471,21 +218,11 @@
 
 ### Changes
 
-- style: make scripts\check-imports.rs happy
-- chore(example): remove unused glass_dialog_showcase example entry from Cargo.toml
-- feat(glass-dialog): add modal glass dialog component and showcase example
-- feat(animation): add cubic ease-in-out animation module and unify easing logic in dialog, glass_switch, and switch components
-- build(deps): bump glyphon-tessera-fork from 0.9.0 to 0.9.1
+- Added modal glass dialogs and easing-based transitions.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.3.1...tessera-ui-basic-components-v1.4.0)
 
 ## [v1.3.1] - 2025-07-31 +08:00
-
-### Changes
-
-- fix(fluid_glass): align ripple default behavior with glass_button
-- refactor(example): remove custom Surface interactive demo and related state
-- fix(dialog): improve doc example to demonstrate usage of color with alpha in button and text
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.3.0...tessera-ui-basic-components-v1.3.1)
 
@@ -493,20 +230,11 @@
 
 ### Changes
 
-- feat(dialog): add content_alpha parameter to dialog_content for animated opacity
-- fix(surface, dialog): add block_input to surface and dialog to block all input events
-- docs(dialog): improve doc example for dialog_provider
-- feat(dialog): refactor DialogProvider state management and API, add animation support
-- feat(basic-components,component_tree): unify cursor position API and add event blocking methods
-- docs(dialog): rewrite doc example for dialog_provider with updated usage and API
+- Dialogs and surfaces can block input; dialog visibility supports animation.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.2.1...tessera-ui-basic-components-v1.3.0)
 
 ## [v1.2.1] - 2025-07-29 +08:00
-
-### Changes
-
-- style(checkbox): adjust checkmark size and padding for better visual centering
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.2.0...tessera-ui-basic-components-v1.2.1)
 
@@ -514,31 +242,19 @@
 
 ### Changes
 
-- feat(scrollable): support Overlay/Alongside scrollbar layouts, always-visible by default, improve API
-- feat(scrollable): add ScrollBarBehavior with AlwaysVisible, AutoHide, and Hidden modes
-- chore(deps): bump glam from 0.30.4 to 0.30.5
+- Scrollbars support overlay and alongside layouts, and can be hidden or auto-hidden.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.1.3...tessera-ui-basic-components-v1.2.0)
 
 ## [v1.1.3] - 2025-07-28 +08:00
 
-### Changes
-
-- fix(tessera-ui-basic-components): correct layout calculation for fill dimension
-
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.1.2...tessera-ui-basic-components-v1.1.3)
 
 ## [v1.1.2] - 2025-07-28 +08:00
 
-### Changes
-
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.1.1...tessera-ui-basic-components-v1.1.2)
 
 ## [v1.1.1] - 2025-07-25 +08:00
-
-### Changes
-
-- chore: update Cargo.toml to include homepage.workspace for all packages
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.1.0...tessera-ui-basic-components-v1.1.1)
 
@@ -546,8 +262,7 @@
 
 ### Changes
 
-- docs(scrollable): correct state initialization in doc example
-- feat(scrollable): introduce reusable scrollbar and enhance scrollable component
+- Added reusable scrollbars.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.0.2...tessera-ui-basic-components-v1.1.0)
 
@@ -555,32 +270,19 @@
 
 ### Changes
 
-- style(docs): normalize doc comments to standard format
-- feat(clipboard): introduce core clipboard abstraction
+- Added a clipboard API for components.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.0.1...tessera-ui-basic-components-v1.0.2)
 
 ## [v1.0.1] - 2025-07-24 +08:00
 
-### Changes
-
-- chore: transfer repo to https://github.com/tessera-ui/tessera
-- refactor(core): provide ergonomic helpers on `MeasureInput`
-
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.0.0...tessera-ui-basic-components-v1.0.1)
 
 ## [v1.0.0] - 2025-07-21 +08:00
 
-### Changes
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.4.1...tessera-ui-basic-components-v1.0.0)
 
 ## [v0.4.1] - 2025-07-21 +08:00
-
-### Changes
-
-- fix(layout): Correct `Fill` dimension behavior in Row and Column
-- docs(ui-basic-components): add comprehensive rustdoc and examples
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.4.0...tessera-ui-basic-components-v0.4.1)
 
@@ -588,9 +290,7 @@
 
 ### Changes
 
-- feat(text-editor): clip selection highlight to visible area
-- feat(text-editor): implement clipboard and shortcut support
-- feat(text_editor): change cursor to text icon on hover
+- Text editing supports clipboard shortcuts and visible-area selection.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.3.0...tessera-ui-basic-components-v0.4.0)
 
@@ -598,10 +298,7 @@
 
 ### Changes
 
-- feat(slider): change cursor to pointer on hover
-- feat(slider): redesign to be thumb-less and add disabled state
-- feat(glass_slider): redesign component for a modern, thumb-less look
-- feat(fluid_glass): implement world-coordinate lighting for borders
+- Redesigned sliders with a disabled state and updated glass effects.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.2.0...tessera-ui-basic-components-v0.3.0)
 
@@ -609,13 +306,10 @@
 
 ### Changes
 
-- feat(glass_switch): add border support and enhance visuals
-- feat(shape): add configurable G2-like corner continuity
+- Glass switches support borders and shapes support configurable corner continuity.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.1.0...tessera-ui-basic-components-v0.2.0)
 
 ## [v0.1.0] - 2025-07-19 +08:00
-
-### Changes
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v0.2.0...tessera-ui-basic-components-v0.1.0)

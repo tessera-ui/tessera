@@ -282,8 +282,8 @@ fn format_rail_status(label: &str, selected: usize) -> String {
     I18N.format(
         "ui-value-destination-value",
         [
-            ("v0", I18N.text(&label).into()),
-            ("v1", I18N.text(&name).into()),
+            ("v0", I18N.text(label).into()),
+            ("v1", I18N.text(name).into()),
         ],
     )
 }
@@ -343,7 +343,6 @@ fn card(
         note,
         RenderSlot::new(move || {
             let screen_label = screen_label.clone();
-            let rail = rail.clone();
             let body = RenderSlot::new(move || {
                 let screen = figures::screen(screen_label.clone(), width, Dp(340.0))
                     .trailing(trailing)
@@ -351,7 +350,7 @@ fn card(
                     .bar(bar)
                     .hidden_menu(hidden);
                 if !hidden && bar == 0 {
-                    screen.rail_shared(rail.clone());
+                    screen.rail_shared(rail);
                 }
             });
             if dark {
@@ -729,7 +728,7 @@ fn rail_color_half_content(dark: bool) {
     figures::canvas(
         I18N.format(
             "ui-value-navigation-rail-colors",
-            [("v0", I18N.text(&mode).into())],
+            [("v0", I18N.text(mode).into())],
         ),
         Dp(640.0),
         RenderSlot::new(move || {
@@ -746,16 +745,14 @@ fn rail_color_half_content(dark: bool) {
                             I18N.format(
                                 "ui-value-value-reference-rail",
                                 [
-                                    ("v0", I18N.text(&mode).into()),
+                                    ("v0", I18N.text(mode).into()),
                                     (
                                         "v1",
-                                        I18N.text(
-                                            &(if expanded {
-                                                "ui-expanded-7100"
-                                            } else {
-                                                "ui-collapsed-7101"
-                                            }),
-                                        )
+                                        I18N.text(if expanded {
+                                            "ui-expanded-7100"
+                                        } else {
+                                            "ui-collapsed-7101"
+                                        })
                                         .into(),
                                     ),
                                 ],
@@ -1053,13 +1050,11 @@ fn layout_figure(expanded: bool) {
                                         [
                                             (
                                                 "v0",
-                                                I18N.text(
-                                                    &(if expanded {
-                                                        "ui-expanded-7100"
-                                                    } else {
-                                                        "ui-collapsed-7101"
-                                                    }),
-                                                )
+                                                I18N.text(if expanded {
+                                                    "ui-expanded-7100"
+                                                } else {
+                                                    "ui-collapsed-7101"
+                                                })
                                                 .into(),
                                             ),
                                             ("v1", (index + 1).into()),
@@ -1303,8 +1298,8 @@ fn baseline() {
                     I18N.format(
                         "ui-value-on-value-destination",
                         [
-                            ("v0", I18N.text(&state).into()),
-                            ("v1", I18N.text(&target).into()),
+                            ("v0", I18N.text(state).into()),
+                            ("v1", I18N.text(target).into()),
                         ],
                     )
                 })
@@ -2090,7 +2085,7 @@ fn behavior(
                 });
             text(I18N.format(
                 "ui-current-destination-value",
-                [("v0", I18N.text(&(NAMES[modal_selected.get()])).into())],
+                [("v0", I18N.text(NAMES[modal_selected.get()]).into())],
             ))
             .style(type_style(14.0, 20.0));
         });
@@ -2369,7 +2364,7 @@ fn scrolling_rail_view(
                                     text(I18N.format(
                                         "ui-value-message-value",
                                         [
-                                            ("v0", I18N.text(&(NAMES[selected.get()])).into()),
+                                            ("v0", I18N.text(NAMES[selected.get()]).into()),
                                             ("v1", (index + 1).into()),
                                         ],
                                     ))
@@ -2523,7 +2518,7 @@ fn voicemail_weights() {
                 if active {
                     spacer().modifier(Modifier::new().width(Dp(64.0)));
                 }
-                let mut style = style.clone();
+                let mut style = style;
                 style.font_weight = if active { 600 } else { 400 };
                 column()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -2553,7 +2548,7 @@ fn voicemail_weights() {
                             });
                         gap(Dp(8.0));
                         text(I18N.text("ui-voicemail"))
-                            .style(style.clone())
+                            .style(style)
                             .color(scheme.on_surface);
                     });
             }

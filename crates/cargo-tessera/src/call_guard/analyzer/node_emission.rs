@@ -14,8 +14,6 @@ struct Scope {
 }
 
 impl CallAnalyzer<'_> {
-    /// Rejects a build context that may emit more than `limit` nodes, emit one
-    /// repeatedly, or declare content after its node outside `child`.
     pub(super) fn check_node_emissions(&mut self, body: &SyntaxNode, limit: u32) {
         let scope = Scope {
             limit,

@@ -14,7 +14,7 @@ components.
 
 ## Usage
 
-Register the component pipelines at the application entry:
+Add the component package to the application entry to use the official components:
 
 ```rust
 EntryPoint::new(app).package(tessera_components::ComponentsPackage)

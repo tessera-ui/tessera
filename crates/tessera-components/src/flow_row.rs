@@ -35,25 +35,17 @@ use self::flow_layout::{FlowAxis, FlowLayout};
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{boxed::boxed, flow_row::flow_row, modifier::ModifierExt as _};
-/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Dp, Modifier, tessera, testing::UiTest};
+/// use tessera_components::{flow_row::flow_row, md3::text::text};
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
-/// fn demo() {
-///     flow_row().modifier(Modifier::new().width(Dp(50.0))).children(|| {
-///         for tag in ["first", "second"] {
-///             boxed().modifier(
-///                 Modifier::new().size(Dp(30.0), Dp(10.0))
-///                     .semantics(SemanticsArgs { test_tag: Some(tag.into()), ..Default::default() })
-///             ).children(|| {});
-///         }
+/// fn categories() {
+///     flow_row().max_items_per_line(2).children(|| {
+///         text("News");
+///         text("Sports");
+///         text("Weather");
 ///     });
 /// }
-///
-/// let snapshot = UiTest::new().content(demo).viewport(50, 100).frame();
-/// snapshot.node("first").rect(0, 0, 30, 10);
-/// snapshot.node("second").rect(0, 10, 30, 10);
 /// ```
 #[tessera]
 pub fn flow_row(

@@ -63,7 +63,7 @@ cargo tessera dev
 ```
 `cargo tessera dev` rebuilds and restarts the app when sources, manifests, app config, or resources change. Pass `--verbose` to see the underlying `cargo` commands.
 
-Record profiler output or show the dirty replay overlay; both flags also work
+Record profiler output or show the visual update overlay; both flags also work
 with `build` and `android dev` (Android takes a sandbox path such as
 `files/tessera-profiler.jsonl`):
 

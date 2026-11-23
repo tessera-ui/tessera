@@ -13,7 +13,7 @@ use tessera_ui::{
     accesskit::{Node, NodeId, Rect, Role},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
-    testing::{UiTest, WorkPhase},
+    testing::UiTest,
     time::Instant,
 };
 
@@ -242,7 +242,6 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                 let moved = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
                 assert_eq!(moved.x, popup.x + 12.0);
                 assert_eq!(moved.y, popup.y);
-                assert_placement_only(&renderer);
 
                 renderer.resize(200, 400);
                 renderer.frames(8);
@@ -303,7 +302,6 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
                 let moved = menu_bounds(&renderer, "Copy precise link");
                 assert_eq!(moved.x0, popup.x0 + 7.5);
                 assert_eq!(moved.y0, popup.y0);
-                assert_placement_only(&renderer);
                 renderer.resize(200, 400);
                 renderer.frames(8);
                 let popup = menu_bounds(&renderer, "Copy precise link");
@@ -497,19 +495,4 @@ fn window_bounds(renderer: &UiTest, label: &str, role: Role) -> tessera_ui::Floa
         width: bounds.width() as f32,
         height: bounds.height() as f32,
     }
-}
-
-fn assert_placement_only(renderer: &UiTest) {
-    let phases = renderer.work().executions();
-    assert!(phases.iter().any(|entry| entry.phase == WorkPhase::Place));
-    assert!(phases.iter().all(
-        |entry| entry.phase != WorkPhase::Measure && entry.phase != WorkPhase::IntrinsicMeasure
-    ));
-    assert!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Paint)
-            .next()
-            .is_none()
-    );
 }

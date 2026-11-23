@@ -50,8 +50,9 @@ impl Registry {
         }
         self.last_input = Some(now);
         self.prefix.push_str(text);
-        let first = self.prefix.chars().next().unwrap();
-        let cycle = self.prefix.chars().all(|character| character == first);
+        let mut chars = self.prefix.chars();
+        let first = chars.next().expect("typeahead prefix must not be empty");
+        let cycle = chars.all(|character| character == first);
         if cycle {
             self.prefix = first.to_string();
         }

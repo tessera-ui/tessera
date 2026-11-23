@@ -8,13 +8,11 @@ use crate::{
     render_graph::{DrawGeometry, RenderGraphOp},
 };
 
-/// A pass planning result for the current frame.
 pub(crate) struct RenderPassGraph<'a> {
     passes: Vec<RenderPassPlan<'a>>,
 }
 
 impl<'a> RenderPassGraph<'a> {
-    /// Builds a render pass graph from ordered ops.
     pub(crate) fn build(
         ops: impl IntoIterator<Item = &'a RenderGraphOp>,
         texture_size: wgpu::Extent3d,
@@ -107,13 +105,11 @@ impl<'a> RenderPassGraph<'a> {
         Self { passes }
     }
 
-    /// Returns the render passes in submission order.
     pub(crate) fn into_passes(self) -> Vec<RenderPassPlan<'a>> {
         self.passes
     }
 }
 
-/// A render pass plan with draw commands or compute work.
 pub(crate) enum RenderPassPlan<'a> {
     /// Draws into the scene; `reads_scene` passes sample the scene first.
     Draw {
@@ -140,7 +136,6 @@ impl DrawPassBuilder<'_> {
     }
 }
 
-/// Compute work required for a render pass.
 pub(crate) struct ComputePlanItem<'a> {
     pub(crate) command: &'a dyn ComputeCommand,
     pub(crate) geometry: DrawGeometry,
@@ -148,7 +143,6 @@ pub(crate) struct ComputePlanItem<'a> {
     pub(crate) sampling_rect: PxRect,
 }
 
-/// Metadata for draw commands submitted in a pass.
 pub(crate) struct DrawCommandWithMetadata<'a> {
     pub(crate) command: &'a dyn DrawCommand,
     pub(crate) type_id: std::any::TypeId,
@@ -156,13 +150,11 @@ pub(crate) struct DrawCommandWithMetadata<'a> {
     pub(crate) draw_rect: PxRect,
 }
 
-/// Draw or clip operations inside a pass.
 pub(crate) enum DrawOrClip<'a> {
     Draw(DrawCommandWithMetadata<'a>),
     Clip(ClipOps),
 }
 
-/// Clip stack operations for a render pass.
 pub(crate) enum ClipOps {
     Push(PxRect),
     ShapePush {

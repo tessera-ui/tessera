@@ -650,7 +650,7 @@ fn configuration_figure(optional: bool) {
                                                 [(
                                                     "v0",
                                                     I18N.text(
-                                                        &(["ui-xs", "S", "M", "L", "ui-xl"][index]),
+                                                        ["ui-xs", "S", "M", "L", "ui-xl"][index],
                                                     )
                                                     .into(),
                                                 )],
@@ -843,7 +843,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                     .value_indicator(SliderValueIndicatorVisibility::Always)
                                     .accessibility_label(I18N.format(
                                         "ui-value-slider-color-roles",
-                                        [("v0", I18N.text(&label).into())],
+                                        [("v0", I18N.text(label).into())],
                                     ));
                             });
                         for (state, center, name) in
@@ -866,7 +866,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                             I18N.format(
                                                 "ui-value-value-inset-color-roles",
                                                 [
-                                                    ("v0", I18N.text(&label).into()),
+                                                    ("v0", I18N.text(label).into()),
                                                     (
                                                         "v1",
                                                         I18N.text(if name == "inactive" {
@@ -899,19 +899,16 @@ fn color_marker(number: usize, center_x: Dp, center_y: Dp, dark: bool) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(
-                        I18N.format(
-                            "ui-slider-color-marker-value-value",
-                            [
-                                ("v0", (number).into()),
-                                (
-                                    "v1",
-                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                        .into(),
-                                ),
-                            ],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-slider-color-marker-value-value",
+                        [
+                            ("v0", (number).into()),
+                            (
+                                "v1",
+                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                            ),
+                        ],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1093,19 +1090,16 @@ fn state_specimen(
                 .disabled(index == 1)
                 .presentation_state(state)
                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction)
-                .accessibility_label(
-                    I18N.format(
-                        "ui-value-value-slider-state",
-                        [
-                            (
-                                "v0",
-                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                    .into(),
-                            ),
-                            ("v1", I18N.text(&label).into()),
-                        ],
-                    ),
-                );
+                .accessibility_label(I18N.format(
+                    "ui-value-value-slider-state",
+                    [
+                        (
+                            "v0",
+                            I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                        ),
+                        ("v1", I18N.text(&label).into()),
+                    ],
+                ));
         });
     boxed()
         .alignment(Alignment::Center)
@@ -1116,19 +1110,16 @@ fn state_specimen(
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(
-                        I18N.format(
-                            "ui-slider-state-marker-value-value",
-                            [
-                                ("v0", (index + 1).into()),
-                                (
-                                    "v1",
-                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                        .into(),
-                                ),
-                            ],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-slider-state-marker-value-value",
+                        [
+                            ("v0", (index + 1).into()),
+                            (
+                                "v1",
+                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                            ),
+                        ],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1641,16 +1632,13 @@ fn size_specimen(
                         .size(SIZES[index])
                         .controller(controller)
                         .on_change(move |next| value.set(next))
-                        .accessibility_label(
-                            I18N.format(
-                                "ui-value-size-measurements",
-                                [(
-                                    "v0",
-                                    I18N.text(&(["ui-xs", "S", "M", "L", "ui-xl"][index]))
-                                        .into(),
-                                )],
-                            ),
-                        );
+                        .accessibility_label(I18N.format(
+                            "ui-value-size-measurements",
+                            [(
+                                "v0",
+                                I18N.text(["ui-xs", "S", "M", "L", "ui-xl"][index]).into(),
+                            )],
+                        ));
                     if index >= 2 {
                         specimen.inset_icon(filled::VOLUME_UP_SVG);
                     }

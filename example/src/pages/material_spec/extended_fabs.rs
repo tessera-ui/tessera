@@ -320,13 +320,11 @@ fn collapsible(#[prop(into)] label: String) {
                         [
                             (
                                 "v0",
-                                I18N.text(
-                                    &(if expanded.get() {
-                                        "ui-expanded"
-                                    } else {
-                                        "ui-collapsed"
-                                    }),
-                                )
+                                I18N.text(if expanded.get() {
+                                    "ui-expanded"
+                                } else {
+                                    "ui-collapsed"
+                                })
                                 .into(),
                             ),
                             ("v1", (activations.get()).into()),

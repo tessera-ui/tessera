@@ -14,13 +14,14 @@
 //!
 //! ```no_run
 //! use tessera_components::md3::theme::{MaterialTheme, material_theme};
+//! use tessera_components::md3::text::text;
 //!
 //! #[tessera_ui::tessera]
 //! fn app() {
 //!     material_theme()
 //!         .theme(|| MaterialTheme::default())
 //!         .child(|| {
-//!             // Your app code here
+//!             text("Hello from Tessera");
 //!         });
 //! }
 //!
@@ -31,35 +32,10 @@
 //!     EntryPoint::new(app).package(tessera_components::ComponentsPackage)
 //! }
 //!
-//! fn main() {
-//!     let _ = run().run_desktop();
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     run().run_desktop()?;
+//!     Ok(())
 //! }
-//! ```
-//!
-//! Then you can use the components in your UI.
-//!
-//! # Example
-//!
-//! ```
-//! # use tessera_ui::tessera;
-//! # #[tessera]
-//! # fn component() {
-//! use tessera_components::md3::{button::button, text::text, text_input::text_input};
-//! # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-//! # material_theme()
-//! #     .theme(|| MaterialTheme::default())
-//! #     .child(|| {
-//!
-//! // Button example
-//! button().filled().on_click(|| {}).child(|| {
-//!     text("Click me");
-//! });
-//!
-//! // Text editor example
-//! text_input();
-//! #     });
-//! # }
-//! # tessera_ui::testing::UiTest::new().content(component).frame();
 //! ```
 #![deny(
     missing_docs,

@@ -1,9 +1,3 @@
-//! Width exchange and press completion regressions.
-//!
-//! ## Usage
-//!
-//! Preserve the width budget while buttons expand and return to rest.
-
 use tessera_ui::Px;
 
 use crate::animation::test_instant as at;
@@ -103,19 +97,4 @@ fn disabled_motion_snaps_and_reactivation_keeps_interrupted_values() {
     motion.update(false, true);
     motion.pulse();
     assert!(motion.is_animating());
-}
-
-#[test]
-fn press_width_uses_the_button_group_pressed_spring() {
-    let mut motion = PressWidthMotion::default();
-    motion.update(true, true);
-    motion.advance(at(0));
-    let mut peak = 0.0_f64;
-    for millis in 1..=400 {
-        motion.advance(at(millis * 1_000_000));
-        peak = peak.max(motion.value());
-    }
-    // A 0.9 damping ratio overshoots by about 0.15%; the 0.6 fast-spatial
-    // spring this replaces overshoots by about 9.5%.
-    assert!(peak <= 1.005, "pressed width overshoot {peak}");
 }

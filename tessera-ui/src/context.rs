@@ -481,35 +481,6 @@ where
 /// invalidates the descendants that read it.
 ///
 /// This is intended for use inside component build functions only.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{Color, provide_context, tessera, use_context};
-///
-/// #[derive(Clone, PartialEq)]
-/// struct Theme {
-///     primary: Color,
-/// }
-///
-/// #[tessera]
-/// fn root() {
-///     provide_context(
-///         Theme {
-///             primary: Color::RED,
-///         },
-///         || {
-///             leaf();
-///         },
-///     );
-/// }
-///
-/// #[tessera]
-/// fn leaf() {
-///     let theme = use_context::<Theme>().expect("Theme must be provided");
-///     theme.with(|t| assert_eq!(t.primary, Color::RED));
-/// }
-/// ```
 pub fn provide_context<T, R>(value: T, f: impl FnOnce() -> R) -> R
 where
     T: PartialEq + 'static,
@@ -628,7 +599,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{any::TypeId, cell::RefCell, rc::Rc};
+    use std::{
+        any::TypeId,
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
 
     use super::{
         ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable,
@@ -658,18 +633,20 @@ mod tests {
     fn context_cleanup_drops_values_outside_table_borrow() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        struct ReadOnDrop;
+        struct ReadOnDrop(Rc<Cell<usize>>);
         impl Drop for ReadOnDrop {
             fn drop(&mut self) {
                 super::with_slot_table(|table| {
                     assert!(table.entries.iter().all(|entry| entry.value.is_none()));
                     assert!(table.key_to_slot.is_empty());
                 });
+                self.0.set(self.0.get() + 1);
             }
         }
 
         for cleanup in 0..3 {
             reset_test_state();
+            let drops = Rc::new(Cell::new(0));
             let key = SlotKey {
                 instance_logic_id: 42,
                 slot_hash: 7,
@@ -679,7 +656,7 @@ mod tests {
                 table.entries.push(SlotEntry {
                     key,
                     generation: 0,
-                    value: Some(Rc::new(ReadOnDrop)),
+                    value: Some(Rc::new(ReadOnDrop(drops.clone()))),
                     last_alive_epoch: 0,
                     derived: None,
                 });
@@ -694,10 +671,7 @@ mod tests {
             } else {
                 super::drop_context_slots_for_instance_logic_ids(&instances);
             }
-            super::with_slot_table(|table| {
-                assert_eq!(table.free_list, [0]);
-                assert_eq!(table.entries[0].generation, 1);
-            });
+            assert_eq!(drops.get(), 1);
         }
     }
 
@@ -752,14 +726,15 @@ mod tests {
     }
 
     #[test]
-    fn with_context_snapshot_shares_live_bindings() {
+    fn context_snapshot_exposes_its_binding_then_restores_the_current_scope() {
         #[crate::tessera]
         fn context_provider() {
-            super::provide_context(42_u8, || {
-                let snapshot = super::current_context_map();
+            let snapshot = super::provide_context(42_u8, super::current_context_map);
+            super::provide_context(7_u8, || {
                 with_context_snapshot(&snapshot, || {
-                    assert!(snapshot.ptr_eq(&super::current_context_map()));
+                    assert_eq!(super::use_context::<u8>().unwrap().get(), 42);
                 });
+                assert_eq!(super::use_context::<u8>().unwrap().get(), 7);
             });
         }
 

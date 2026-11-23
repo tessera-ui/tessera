@@ -17,15 +17,9 @@ use crate::{
 
 use super::*;
 
-/// Scene pixels available to draws that sample the scene.
-enum SceneState {
-    /// Draws sample a copy of the offscreen target.
-    Offscreen,
-    /// A compute pass filtered the scene inside `rect`.
-    Filtered {
-        texture: ScratchTexture,
-        rect: PxRect,
-    },
+struct FilteredScene {
+    texture: ScratchTexture,
+    rect: PxRect,
 }
 
 struct RenderPassParams<'a, 'commands> {
@@ -93,8 +87,6 @@ struct SubmitBatchParams<'a, 'b> {
 }
 
 impl RenderCore {
-    /// Renders the frame and presents it to the window surface, or keeps it in
-    /// the offscreen copy when the core has no surface.
     pub(crate) fn render(
         &mut self,
         graph: RenderGraph,
@@ -344,6 +336,7 @@ impl RenderCore {
         #[cfg(target_os = "windows")]
         let graph = if let Some(host) = windows_host.as_ref() {
             let mut placements = Vec::new();
+            let mut blockers = Vec::new();
             let mut overlays_after = Vec::new();
             let graph = if graph.has_platform_views() {
                 let slices = graph.platform_view_slices();
@@ -370,6 +363,7 @@ impl RenderCore {
                         self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
                     }
                     placements = slices.views;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
                     overlays_after = overlays;
                     self.previous_graph = None;
                     slices.draws[0].render_graph()
@@ -377,10 +371,12 @@ impl RenderCore {
             } else {
                 graph
             };
-            if let Err(error) = host
-                .borrow_mut()
-                .apply_composition(&placements, &overlays_after)
-            {
+            if let Err(error) = host.borrow_mut().apply_composition(
+                &placements,
+                &blockers,
+                &overlays_after,
+                [self.config.width, self.config.height],
+            ) {
                 warn!(%error, "Failed to apply DirectComposition view order");
             }
             self.windows_composition_active = !placements.is_empty();
@@ -395,6 +391,7 @@ impl RenderCore {
                 .as_ref()
                 .map_or(1.0, |window| window.scale_factor());
             let mut placements = Vec::new();
+            let mut blockers = Vec::new();
             let mut overlays_after = Vec::new();
             let mut overlay_input_regions = Vec::new();
             let graph = if graph.has_platform_views() {
@@ -422,6 +419,7 @@ impl RenderCore {
                         self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
                     }
                     placements = slices.views;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
                     overlays_after = overlays;
                     overlay_input_regions = overlays_after
                         .iter()
@@ -435,6 +433,7 @@ impl RenderCore {
             };
             host.borrow_mut().apply_composition(
                 &placements,
+                &blockers,
                 &overlays_after,
                 &overlay_input_regions,
                 [self.config.width, self.config.height],
@@ -828,7 +827,7 @@ impl RenderCore {
             state.graphics,
         );
 
-        let mut scene = SceneState::Offscreen;
+        let mut filtered_scene = None;
         let mut scene_written = !full_redraw;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         for mut pass in passes {
@@ -836,7 +835,7 @@ impl RenderCore {
             Self::execute_render_pass(
                 &mut state,
                 &mut encoder,
-                &mut scene,
+                &mut filtered_scene,
                 &mut scene_written,
                 &mut pass,
                 &mut clip_stack,
@@ -859,7 +858,7 @@ impl RenderCore {
                 );
             }
         }
-        drop(scene);
+        drop(filtered_scene);
 
         RenderCore::blit_to_view(BlitParams {
             encoder: &mut encoder,
@@ -1027,7 +1026,7 @@ impl RenderCore {
     fn execute_render_pass(
         state: &mut RenderCoreFrameState<'_>,
         encoder: &mut wgpu::CommandEncoder,
-        scene: &mut SceneState,
+        filtered_scene: &mut Option<FilteredScene>,
         scene_written: &mut bool,
         pass: &mut RenderPassPlan<'_>,
         clip_stack: &mut SmallVec<[PxRect; 16]>,
@@ -1036,7 +1035,7 @@ impl RenderCore {
         match pass {
             RenderPassPlan::Compute(items) => {
                 if let Some(filtered) = Self::filter_scene(state, encoder, std::mem::take(items)) {
-                    *scene = filtered;
+                    *filtered_scene = Some(filtered);
                 }
             }
             RenderPassPlan::Draw { draws, reads_scene } => {
@@ -1046,9 +1045,9 @@ impl RenderCore {
                 let target_size = state.target_size();
                 let sample_copy;
                 let sampled = if *reads_scene {
-                    Some(match &*scene {
-                        SceneState::Filtered { texture, rect } => (&**texture, *rect),
-                        SceneState::Offscreen => {
+                    Some(match filtered_scene.as_ref() {
+                        Some(FilteredScene { texture, rect }) => (&**texture, *rect),
+                        None => {
                             let rect =
                                 scene_sampling_rect(draws, target_size).unwrap_or_else(|| {
                                     PxRect::from_position_size(PxPosition::ZERO, target_size)
@@ -1079,7 +1078,7 @@ impl RenderCore {
                     clip_stack,
                 });
                 *scene_written = true;
-                *scene = SceneState::Offscreen;
+                *filtered_scene = None;
             }
         }
     }
@@ -1158,7 +1157,7 @@ impl RenderCore {
         state: &mut RenderCoreFrameState<'_>,
         encoder: &mut wgpu::CommandEncoder,
         items: Vec<ComputePlanItem<'_>>,
-    ) -> Option<SceneState> {
+    ) -> Option<FilteredScene> {
         let target_size = state.target_size();
         let region = items
             .iter()
@@ -1275,7 +1274,7 @@ impl RenderCore {
             index = cursor;
         }
 
-        Some(SceneState::Filtered {
+        Some(FilteredScene {
             texture: front,
             rect: region,
         })

@@ -743,11 +743,8 @@ impl tessera_ui::LayoutPolicy for TooltipLayout {
 /// ```
 /// use tessera_components::md3::tooltip::TooltipController;
 /// let mut tooltip = TooltipController::new();
-/// assert!(!tooltip.is_open());
 /// tooltip.show();
-/// assert!(tooltip.is_open());
 /// tooltip.dismiss();
-/// assert!(!tooltip.is_open());
 /// ```
 #[tessera]
 pub fn tooltip_provider(
@@ -836,14 +833,8 @@ pub fn tooltip_provider(
     }
     let mut modifier = modifier.unwrap_or_default();
     modifier = modifier
-        .push_keyboard_preview_input(TooltipDismissInput {
-            controller,
-            popup: popup,
-        })
-        .push_pointer_preview_input(TooltipDismissInput {
-            controller,
-            popup: popup,
-        })
+        .push_keyboard_preview_input(TooltipDismissInput { controller, popup })
+        .push_pointer_preview_input(TooltipDismissInput { controller, popup })
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller });
     let visible = remember(|| None::<tessera_ui::FloatRect>);
@@ -911,13 +902,6 @@ pub fn tooltip_provider(
 /// - `controller` — controller received from the tooltip provider content slot
 /// - `modifier` — modifiers for the trigger wrapper
 /// - `child` — the control that receives focus and normal activation
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::tooltip::TooltipPlacement;
-/// assert_eq!(TooltipPlacement::default(), TooltipPlacement::Above);
-/// ```
 #[tessera]
 pub fn tooltip_anchor(
     controller: State<TooltipController>,

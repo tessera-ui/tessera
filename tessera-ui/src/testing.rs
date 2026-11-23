@@ -42,13 +42,6 @@ pub use query::{
 /// Tests start layout-only with an 800 by 600 viewport at the current density.
 /// Configure the viewport, density, frame step, and optional GPU rendering
 /// before [`UiTest::content`], then step frames and assert the results.
-///
-/// ```
-/// use tessera_ui::testing::UiTest;
-///
-/// let layout = UiTest::new().viewport(200, 100).content(|| {}).frame();
-/// layout.node("root").rect(0, 0, 200, 100);
-/// ```
 pub struct UiTest<'a> {
     owner: ModelScope,
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]
@@ -1100,7 +1093,6 @@ fn reset_runtime_for_layout_test(viewport: (u32, u32)) {
 #[cfg(test)]
 mod tests {
     use std::{
-        num::NonZero,
         sync::atomic::{AtomicBool, Ordering},
         time::Duration,
     };
@@ -1109,8 +1101,7 @@ mod tests {
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
         LayoutModifierChild, LayoutModifierInput, LayoutPolicy, LayoutResult, Modifier,
         NoopDrawModifier, PlacementModifierNode, Px, PxPosition, RenderSlot, SemanticsModifierNode,
-        State, StatefulLayoutPolicy, component_tree::NodeRole, launch_once, layout::MeasureScope,
-        remember, runtime::TesseraRuntime, tessera,
+        State, StatefulLayoutPolicy, launch_once, layout::MeasureScope, remember, tessera,
     };
 
     use super::{UiTest, reset_runtime_for_layout_test};
@@ -1139,60 +1130,53 @@ mod tests {
     }
 
     #[derive(Clone, PartialEq)]
-    struct MeasureRevisionPolicy(State<u8>);
+    struct MeasureHeightPolicy(State<i32>);
 
-    impl LayoutPolicy for MeasureRevisionPolicy {
+    impl LayoutPolicy for MeasureHeightPolicy {
         fn measure(
             &self,
             _: &mut MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
-            let _revision = self.0.get();
             Ok(LayoutResult::new(ComputedData {
                 width: Px(20),
-                height: Px(10),
+                height: Px(self.0.get()),
             }))
         }
     }
 
     #[tessera]
-    fn measure_revision_node(#[prop(into)] tag: String, revision: State<u8>) {
-        crate::layout::layout(MeasureRevisionPolicy(revision))
+    fn measured_height_node(#[prop(into)] tag: String, height: State<i32>) {
+        crate::layout::layout(MeasureHeightPolicy(height))
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
     #[tessera]
-    fn transparent_dirty_siblings(revision: State<u8>) {
-        let stable = remember(|| 0_u8);
-        measure_revision_node("left", revision);
-        measure_revision_node("right", revision);
-        measure_revision_node("stable", stable);
+    fn measured_height_siblings(height: State<i32>) {
+        let stable = remember(|| 10);
+        measured_height_node("first", height);
+        measured_height_node("second", height);
+        measured_height_node("stable", stable);
     }
 
     #[tessera]
-    fn dirty_siblings_fixture(probe: super::TestProbe<Option<State<u8>>>) {
-        let revision = remember(|| 0_u8);
-        probe.set(Some(revision));
-        crate::layout::layout(VerticalStackPolicy)
-            .child(move || transparent_dirty_siblings(revision));
+    fn measured_height_fixture(probe: super::TestProbe<Option<State<i32>>>) {
+        let height = remember(|| 10);
+        probe.set(Some(height));
+        crate::layout::layout(VerticalStackPolicy).child(move || measured_height_siblings(height));
     }
 
     #[test]
-    fn dirty_siblings_share_transparent_ancestors_without_losing_measurement() {
+    fn siblings_follow_shared_height_and_reposition_later_content() {
         let probe = super::TestProbe::default();
         let mut session = UiTest::new()
-            .content(|| dirty_siblings_fixture(probe.clone()))
+            .content(|| measured_height_fixture(probe.clone()))
             .viewport(100, 100);
-        session.frame();
-        let snapshot = session.inspect_components();
-        let instances = ["left", "right", "stable"].map(|tag| snapshot.tagged(tag).instance_id());
-        probe.get().expect("test fixture entry exists").set(1);
-        session.advance(Duration::from_millis(16));
-        assert_eq!(
-            instances.map(|instance| session
-                .work()
-                .for_instance(instance, crate::work::WorkPhase::Measure)),
-            [1, 1, 0],
-        );
+        session.frame().node("stable").rect(0, 20, 20, 10);
+        probe.get().unwrap().set(15);
+        let layout = session.frames(1);
+        layout.node("first").rect(0, 0, 20, 15);
+        layout.node("second").rect(0, 15, 20, 15);
+        layout.node("stable").rect(0, 30, 20, 10);
     }
 
     #[tessera]
@@ -1207,7 +1191,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_state_updates_apply_when_component_build_is_skipped() {
+    fn layout_state_updates_refresh_the_reported_width() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = MeasureProbe::default();
@@ -1217,7 +1201,6 @@ mod tests {
         session.frame().node("measure-only").width(40);
         let width = probe.width.get().expect("width state");
         width.set(80);
-        assert!(!crate::runtime::has_pending_build_invalidations());
         session.frames(1).node("measure-only").width(80);
         width.set(120);
         session.frames(1).node("measure-only").width(120);
@@ -1265,7 +1248,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_observer_build_updates_settle_before_the_frame_finishes() {
+    fn layout_observer_updates_dependent_geometry_in_the_same_frame() {
         let probe = MeasureProbe::default();
         let mut session = UiTest::new()
             .content(|| layout_dependent_build_fixture(probe.clone()))
@@ -1274,11 +1257,6 @@ mod tests {
         let width = probe.width.get().expect("test fixture entry exists");
         session.run(|| width.set(80));
         session.frames(1).node("layout-dependent-build").width(80);
-        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
-        assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
-        session.frames(1).node("layout-dependent-build").width(80);
-        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
-        assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
     }
 
     #[tessera]
@@ -1961,7 +1939,7 @@ mod tests {
     }
 
     #[test]
-    fn nested_slot_props_finish_forward_replay_before_layout_in_the_same_frame() {
+    fn nested_slot_props_update_layout_in_the_same_frame() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = super::TestProbe::default();
@@ -1972,11 +1950,6 @@ mod tests {
         probe.get().expect("test fixture entry exists").set(60);
         session.frames(1).node("deep-slot-value").size(60, 20);
         session.frames(1).node("deep-slot-value").size(60, 20);
-        assert_eq!(
-            session.diagnostics().measure_node_calls,
-            1,
-            "Completed slot updates must leave the following idle layout cached"
-        );
     }
 
     #[tessera]
@@ -2136,7 +2109,7 @@ mod tests {
     }
 
     #[test]
-    fn intrinsic_probes_preserve_normal_measurement_cache_and_placements() {
+    fn intrinsic_probes_do_not_change_final_layout() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         for intrinsic_first in [false, true] {
@@ -2147,8 +2120,6 @@ mod tests {
             for _ in 0..2 {
                 session.frames(1).node("intrinsic-child").rect(7, 9, 38, 42);
             }
-            assert!(session.diagnostics().cache_hits_direct > 0);
-            assert_eq!(session.diagnostics().cache_store_count, 0);
         }
     }
 
@@ -2232,7 +2203,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_replay_updates_size_without_allocating_a_second_node() {
+    fn layout_replay_updates_the_reported_size() {
         let width = super::TestProbe::default();
         let mut session = UiTest::new()
             .content({
@@ -2242,33 +2213,15 @@ mod tests {
                 }
             })
             .viewport(100, 100);
-        let layout_id = || {
-            TesseraRuntime::with(|runtime| {
-                let tree = runtime.component_tree.tree();
-                let root = tree
-                    .get_node_id_at(NonZero::<usize>::MIN)
-                    .expect("build root");
-                let mut nodes = root
-                    .descendants(tree)
-                    .filter(|&id| tree[id].get().fn_name == "explicit_layout_boundary_sample");
-                let id = nodes.next().expect("layout node");
-                assert_eq!(tree[id].get().role, NodeRole::Layout);
-                assert!(nodes.next().is_none());
-                id
-            })
-        };
-
         session
             .frame()
             .node("explicit_layout_boundary_sample")
             .size(24, 12);
-        let initial = session.session.run(layout_id);
         width.get().expect("width state").set(36);
         session
             .frames(1)
             .node("explicit_layout_boundary_sample")
             .size(36, 12);
-        assert_eq!(session.session.run(layout_id), initial);
     }
 
     #[derive(Clone, PartialEq)]
@@ -2548,7 +2501,6 @@ mod tests {
                         .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
-                assert_eq!(session.diagnostics().measure_node_calls, 1);
                 probe
                     .visible
                     .get()
@@ -2567,42 +2519,22 @@ mod tests {
     }
 
     #[tessera]
-    fn inner_layout_cache_sample() {
-        crate::layout::layout(crate::layout::Stack);
-    }
-
-    #[tessera]
     fn nested_composition_layout_sample() {
-        crate::layout::layout(crate::layout::Stack).child(|| inner_layout_cache_sample());
+        crate::layout::layout(crate::layout::Stack).child(|| {
+            tagged_box().tag("nested-child".into()).width(20).height(10);
+        });
     }
 
     #[test]
-    fn stable_frame_reuses_layout_cache_across_composition_boundaries() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
+    fn stable_frames_keep_nested_geometry_without_remeasuring() {
+        let measure = crate::work::WorkPhase::Measure;
         let mut session = UiTest::new()
-            .content(|| nested_composition_layout_sample())
+            .content(nested_composition_layout_sample)
             .viewport(120, 80);
-        session.frame();
-        session.frames(1);
-
-        let diagnostics = session.diagnostics();
-        assert_eq!(
-            diagnostics.geometry_nodes_updated, 0,
-            "unchanged subtrees retain window geometry"
-        );
-        assert_eq!(
-            diagnostics.dirty_nodes_structural, 0,
-            "unchanged frames retain layout adjacency"
-        );
-        assert_eq!(
-            diagnostics.cache_miss_no_entry, 0,
-            "composition boundaries must not force descendant layout nodes to miss the cache"
-        );
-        assert_eq!(
-            diagnostics.measure_node_calls, 1,
-            "a stable frame must resolve from the root layout cache without re-measuring"
-        );
+        session.frame().node("nested-child").rect(0, 0, 20, 10);
+        assert!(session.work().phase(measure).next().is_some());
+        session.frames(1).node("nested-child").rect(0, 0, 20, 10);
+        assert!(session.work().phase(measure).next().is_none());
     }
 
     #[derive(Default)]

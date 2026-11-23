@@ -42,7 +42,6 @@ struct UnitQuadVertex {
     position: [f32; 2],
 }
 
-/// Shared unit-quad buffers for rectangle-based drawing.
 #[derive(Clone)]
 pub(crate) struct SharedQuad {
     vertex: Arc<wgpu::Buffer>,
@@ -64,9 +63,6 @@ impl SharedQuad {
         drop(removed);
     }
 
-    /// Returns the shared (0,0)-(1,1) quad buffers for `device`.
-    ///
-    /// Repeated calls on the same device and runtime session reuse the buffers.
     pub(crate) fn get(device: &wgpu::Device) -> Self {
         let cache = tessera_ui::runtime_resource::<SharedQuadCache>();
         let mut slot = cache.0.borrow_mut();

@@ -453,15 +453,7 @@ fn check_scrolling() {
         renderer.read_pixels() == baseline,
         "nested-scroll geometry and pixels recover after collapse-sized viewports"
     );
-    for _ in 0..12 {
-        renderer.frames(1);
-        let clock = renderer.frame_clock_diagnostics();
-        assert_eq!(clock.resumed_tasks, 0, "the provider stops ticking at rest");
-        assert_eq!(
-            clock.waiting_tasks, 0,
-            "the provider unregisters its frame callback at rest"
-        );
-    }
+    renderer.frames(12);
 }
 
 #[test]

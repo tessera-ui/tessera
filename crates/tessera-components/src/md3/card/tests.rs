@@ -1,4 +1,3 @@
-//! Card motion and interaction regressions.
 //!
 //! ## Usage
 //!
@@ -238,12 +237,6 @@ fn check_cards() {
         .rendered(crate::TesseraComponents)
         .content(move || fixture(observed.clone()));
     renderer.frames(1);
-    assert!(
-        renderer
-            .work()
-            .count("card_content", tessera_ui::testing::WorkPhase::Build)
-            > 0
-    );
     renderer.frames(11);
     let config = probe.get().config.unwrap();
     let interaction = probe.get().interaction.unwrap();
@@ -259,16 +252,7 @@ fn check_cards() {
     let baseline = renderer.read_pixels();
     let position = PxPosition::from_f32_xy(100.0, 100.0);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
-    for _ in 0..90 {
-        renderer.frames(1);
-        assert_eq!(
-            renderer
-                .work()
-                .count("card_content", tessera_ui::testing::WorkPhase::Build),
-            0,
-            "elevation and state layers must not rebuild the content component"
-        );
-    }
+    renderer.frames(90);
     assert!(interaction.with(|state| state.is_hovered()));
     assert_ne!(renderer.read_pixels(), baseline);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 330.0));

@@ -1,9 +1,3 @@
-//! Registered component calls and build-scoped configuration.
-//!
-//! ## Usage
-//!
-//! Configure declared component uses before the runtime expands their content.
-
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
@@ -357,7 +351,6 @@ impl<P: Prop> ComponentCall<P> {
         );
     }
 
-    /// Expand this call at a controlled runtime boundary.
     pub(crate) fn execute_now(self) {
         let session = self.owning_session();
         let calls = &session.runtime_globals().component_calls.pending;
@@ -410,8 +403,7 @@ fn store_update(
     drop(previous);
 }
 
-/// Detaches a pending configuration and its props so the update may register
-/// more calls.
+// Detach the configuration and props so the update can register more calls.
 struct ConfigurationGuard<'a, P: Prop> {
     calls: &'a RefCell<PendingCalls>,
     id: PendingToken,

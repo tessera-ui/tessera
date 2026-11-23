@@ -167,16 +167,13 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                                 .standard()
                                 .icon(filled::ARROW_BACK_SVG)
                                 .content_color(scheme.on_surface_variant)
-                                .accessibility_label(
-                                    I18N.format(
-                                        "ui-value-sheet-color-back",
-                                        [(
-                                            "v0",
-                                            I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                                .into(),
-                                        )],
-                                    ),
-                                )
+                                .accessibility_label(I18N.format(
+                                    "ui-value-sheet-color-back",
+                                    [(
+                                        "v0",
+                                        I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                                    )],
+                                ))
                                 .modifier(at(4.0, 12.0).then(watch_color(geometry, dark, "back")))
                                 .on_click(move || notice.set("ui-back-action-selected".into()));
                         }
@@ -191,16 +188,13 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                             .standard()
                             .icon(filled::CLOSE_SVG)
                             .content_color(scheme.on_surface_variant)
-                            .accessibility_label(
-                                I18N.format(
-                                    "ui-value-sheet-color-close",
-                                    [(
-                                        "v0",
-                                        I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                            .into(),
-                                    )],
-                                ),
-                            )
+                            .accessibility_label(I18N.format(
+                                "ui-value-sheet-color-close",
+                                [(
+                                    "v0",
+                                    I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                                )],
+                            ))
                             .modifier(at(260.0, 12.0).then(watch_color(geometry, dark, "close")))
                             .on_click(move || notice.set("ui-sheet-close-action-selected".into()));
                     });
@@ -425,24 +419,20 @@ fn marker(number: usize, side: bool, dark: bool, x: f64, y: f64) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(
-                        I18N.format(
-                            "ui-value-value-sheet-color-marker-value",
-                            [
-                                (
-                                    "v0",
-                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                        .into(),
-                                ),
-                                (
-                                    "v1",
-                                    I18N.text(&(if side { "ui-side" } else { "ui-bottom" }))
-                                        .into(),
-                                ),
-                                ("v2", (number).into()),
-                            ],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-value-value-sheet-color-marker-value",
+                        [
+                            (
+                                "v0",
+                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                            ),
+                            (
+                                "v1",
+                                I18N.text(if side { "ui-side" } else { "ui-bottom" }).into(),
+                            ),
+                            ("v2", (number).into()),
+                        ],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),

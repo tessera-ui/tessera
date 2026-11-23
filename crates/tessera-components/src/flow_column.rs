@@ -33,25 +33,17 @@ use crate::{
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{boxed::boxed, flow_column::flow_column, modifier::ModifierExt as _};
-/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Dp, Modifier, tessera, testing::UiTest};
+/// use tessera_components::{flow_column::flow_column, md3::text::text};
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
-/// fn demo() {
-///     flow_column().modifier(Modifier::new().height(Dp(50.0))).children(|| {
-///         for tag in ["first", "second"] {
-///             boxed().modifier(
-///                 Modifier::new().size(Dp(10.0), Dp(30.0))
-///                     .semantics(SemanticsArgs { test_tag: Some(tag.into()), ..Default::default() })
-///             ).children(|| {});
-///         }
+/// fn shortcuts() {
+///     flow_column().max_items_per_line(2).children(|| {
+///         text("Inbox");
+///         text("Drafts");
+///         text("Archive");
 ///     });
 /// }
-///
-/// let snapshot = UiTest::new().content(demo).viewport(100, 50).frame();
-/// snapshot.node("first").rect(0, 0, 10, 30);
-/// snapshot.node("second").rect(10, 0, 10, 30);
 /// ```
 #[tessera]
 pub fn flow_column(

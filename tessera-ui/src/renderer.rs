@@ -632,6 +632,7 @@ struct RenderFrameOutcome {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct RendererImeBridgeState {
     current_request: Option<ImeRequest>,
+    wayland_client: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -646,9 +647,36 @@ struct RendererImeBridgeUpdate {
 }
 
 impl RendererImeBridgeState {
-    fn sync_window(&mut self, window: &Window, request: Option<crate::ImeRequest>) {
+    fn sync_app(&mut self, app: &RenderCore, request: Option<ImeRequest>) {
+        #[cfg(target_os = "linux")]
+        if let Some(host) = app.linux_platform_views() {
+            if TesseraRuntime::with(|runtime| {
+                runtime
+                    .component_tree
+                    .focus_owner()
+                    .active_handle_id()
+                    .is_some()
+            }) {
+                host.borrow_mut().blur_wayland();
+            } else {
+                let native = host.borrow().focused_ime_request();
+                if let Some((client, request)) = native {
+                    self.sync_window(app.window(), Some(client), request);
+                    return;
+                }
+            }
+        }
+        self.sync_window(app.window(), None, request);
+    }
+
+    fn sync_window(
+        &mut self,
+        window: &Window,
+        wayland_client: Option<u64>,
+        request: Option<ImeRequest>,
+    ) {
         let ime_was_allowed = self.current_request.is_some();
-        let ime_bridge_update = self.update_request(request);
+        let ime_bridge_update = self.update_request(wayland_client, request);
         if ime_was_allowed && ime_bridge_update.allowed == Some(true) {
             window.set_ime_allowed(false);
         }
@@ -681,6 +709,9 @@ impl RendererImeBridgeState {
     }
 
     fn receive_event(&mut self, event: &winit::event::Ime) -> Option<crate::focus::FocusHandleId> {
+        if self.wayland_client.is_some() {
+            return None;
+        }
         let request = self.current_request.as_mut()?;
         let client = request.client_id?;
         if let winit::event::Ime::TextState(state) = event {
@@ -690,7 +721,11 @@ impl RendererImeBridgeState {
         Some(client)
     }
 
-    fn update_request(&mut self, mut request: Option<ImeRequest>) -> RendererImeBridgeUpdate {
+    fn update_request(
+        &mut self,
+        wayland_client: Option<u64>,
+        mut request: Option<ImeRequest>,
+    ) -> RendererImeBridgeUpdate {
         let change_cause = request
             .as_mut()
             .map_or(winit::event::ImeChangeCause::Other, |request| {
@@ -701,10 +736,11 @@ impl RendererImeBridgeState {
             .as_mut()
             .is_some_and(|request| std::mem::take(&mut request.show_keyboard));
         let previous = self.current_request.as_ref();
-        let context_changed = previous.map(|request| (request.client_id, request.options))
+        let context_changed = previous
+            .map(|request| (self.wayland_client, request.client_id, request.options))
             != request
                 .as_ref()
-                .map(|request| (request.client_id, request.options));
+                .map(|request| (wayland_client, request.client_id, request.options));
         let allowed = context_changed.then_some(request.is_some());
         let cursor_area = request.as_ref().and_then(|next| {
             let old_area =
@@ -729,6 +765,7 @@ impl RendererImeBridgeState {
                 .as_ref()
                 .is_some_and(|request| request.position.is_none());
         self.current_request = request;
+        self.wayland_client = wayland_client;
         RendererImeBridgeUpdate {
             change_cause,
             allowed,
@@ -1326,7 +1363,7 @@ Fps: {:.2}
             .filter(|_| desktop_window_controls_available());
 
         args.ime_bridge_state
-            .sync_window(args.app.window(), window_requests.ime_request);
+            .sync_app(args.app, window_requests.ime_request);
 
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
@@ -1693,6 +1730,57 @@ where
         debug!("Cursor moved to: {}, {}", position.x, position.y);
     }
 
+    #[cfg(target_os = "linux")]
+    fn route_linux_pointer(
+        &mut self,
+        route: impl FnOnce(&mut crate::linux_platform_views::LinuxPlatformViews) -> (bool, bool),
+    ) -> bool {
+        let Some(host) = self.linux_platform_views.as_ref() else {
+            return false;
+        };
+        let (consumed, native_press) = route(&mut host.borrow_mut());
+        if native_press {
+            crate::focus::clear_focus(true);
+            self.sync_wayland_ime();
+        }
+        consumed
+    }
+
+    #[cfg(target_os = "linux")]
+    fn sync_wayland_ime(&mut self) {
+        let Some(app) = self.app.as_ref() else {
+            return;
+        };
+        let native = app
+            .linux_platform_views()
+            .and_then(|host| host.borrow().focused_ime_request());
+        if let Some((client, request)) = native {
+            self.ime_bridge_state
+                .sync_window(app.window(), Some(client), request);
+        } else if self.ime_bridge_state.wayland_client.is_some() {
+            self.ime_bridge_state.sync_window(app.window(), None, None);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn route_windows_pointer(
+        &mut self,
+        route: impl FnOnce(
+            &mut crate::windows_platform_views::WindowsPlatformViews,
+        ) -> crate::windows_platform_views::RoutedPointerInput,
+    ) -> bool {
+        let Some(host) = self.windows_platform_views.as_ref() else {
+            return false;
+        };
+        let event = route(&mut host.borrow_mut());
+        let consumed = event.consumed;
+        if event.native_press {
+            crate::focus::clear_focus(true);
+        }
+        event.dispatch();
+        consumed
+    }
+
     fn handle_cursor_left(&mut self) {
         let _session = self.session.enter();
         // Clear cursor position when it leaves the window
@@ -1900,11 +1988,8 @@ where
             })
         });
         // The next native event must see edits made by this event, before the next frame.
-        self.ime_bridge_state.sync_window(
-            self.app
-                .as_ref()
-                .expect("IME requests follow app creation")
-                .window(),
+        self.ime_bridge_state.sync_app(
+            self.app.as_ref().expect("IME requests follow app creation"),
             request,
         );
         #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -2071,6 +2156,15 @@ where
         }
 
         self.app = Some(app);
+        #[cfg(target_os = "linux")]
+        if let (Some(app), Some(host)) = (&self.app, &self.linux_platform_views)
+            && app.window().has_focus()
+            && host.borrow_mut().apply_wayland_focus_request()
+        {
+            crate::focus::clear_focus(true);
+            self.sync_wayland_ime();
+            self.request_redraw_now();
+        }
         #[cfg(any(target_os = "android", target_os = "ios"))]
         self.send_platform_view_focus();
         #[cfg(target_os = "android")]
@@ -2492,12 +2586,40 @@ where
                 device_id: _,
                 position,
             } => {
+                #[cfg(target_os = "linux")]
+                if self.route_linux_pointer(|host| {
+                    (
+                        host.route_pointer_move(PxPosition::from_f64_arr2([
+                            position.x, position.y,
+                        ])),
+                        false,
+                    )
+                }) {
+                    self.cursor_state.update_position(None);
+                    self.request_redraw_now();
+                    return;
+                }
+                #[cfg(target_os = "windows")]
+                if self.route_windows_pointer(|host| {
+                    host.route_cursor_moved(PxPosition::from_f64_arr2([position.x, position.y]))
+                }) {
+                    self.cursor_state.update_position(None);
+                    self.request_redraw_now();
+                    return;
+                }
                 self.handle_cursor_moved(position);
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::CursorMoved);
             }
             WindowEvent::CursorLeft { device_id: _ } => {
+                #[cfg(target_os = "linux")]
+                self.route_linux_pointer(|host| {
+                    host.route_pointer_leave();
+                    (false, false)
+                });
+                #[cfg(target_os = "windows")]
+                self.route_windows_pointer(|host| host.route_cursor_left());
                 self.handle_cursor_left();
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
@@ -2508,6 +2630,23 @@ where
                 state,
                 button,
             } => {
+                #[cfg(target_os = "linux")]
+                if self.route_linux_pointer(|host| host.route_button(button, state)) {
+                    self.request_redraw_now();
+                    return;
+                }
+                #[cfg(target_os = "linux")]
+                if state == winit::event::ElementState::Pressed
+                    && button == winit::event::MouseButton::Left
+                    && self.ime_bridge_state.wayland_client.is_some()
+                {
+                    self.sync_wayland_ime();
+                }
+                #[cfg(target_os = "windows")]
+                if self.route_windows_pointer(|host| host.route_mouse_button(button, state)) {
+                    self.request_redraw_now();
+                    return;
+                }
                 self.handle_mouse_input(state, button);
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
@@ -2518,12 +2657,38 @@ where
                 delta,
                 phase: _,
             } => {
+                #[cfg(target_os = "linux")]
+                if self.route_linux_pointer(|host| (host.route_wheel(delta), false)) {
+                    self.request_redraw_now();
+                    return;
+                }
+                #[cfg(target_os = "windows")]
+                if self.route_windows_pointer(|host| host.route_mouse_wheel(delta)) {
+                    self.request_redraw_now();
+                    return;
+                }
                 self.handle_mouse_wheel(delta);
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::MouseWheel);
             }
             WindowEvent::Touch(touch_event) => {
+                #[cfg(target_os = "linux")]
+                if self.route_linux_pointer(|host| host.route_touch(touch_event)) {
+                    self.request_redraw_now();
+                    return;
+                }
+                #[cfg(target_os = "linux")]
+                if touch_event.phase == winit::event::TouchPhase::Started
+                    && self.ime_bridge_state.wayland_client.is_some()
+                {
+                    self.sync_wayland_ime();
+                }
+                #[cfg(target_os = "windows")]
+                if self.route_windows_pointer(|host| host.route_touch(touch_event)) {
+                    self.request_redraw_now();
+                    return;
+                }
                 self.handle_touch(touch_event);
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
@@ -2547,6 +2712,16 @@ where
                 redraw_reasons.push(RedrawReason::ScaleFactorChanged);
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                #[cfg(target_os = "linux")]
+                if self
+                    .linux_platform_views
+                    .as_ref()
+                    .is_some_and(|host| host.borrow().route_key(event.clone()))
+                {
+                    self.sync_wayland_ime();
+                    self.request_redraw_now();
+                    return;
+                }
                 #[cfg(target_os = "ios")]
                 {
                     self.receive_platform_view_focus();
@@ -2563,12 +2738,31 @@ where
             WindowEvent::ModifiersChanged(modifiers) => {
                 debug!("Modifiers changed: {modifiers:?}");
                 self.keyboard_state.update_modifiers(modifiers.state());
+                #[cfg(target_os = "windows")]
+                if let Some(host) = &self.windows_platform_views {
+                    host.borrow_mut().set_modifiers(modifiers.state());
+                }
+                #[cfg(target_os = "linux")]
+                if let Some(host) = &self.linux_platform_views {
+                    host.borrow_mut().set_modifiers(modifiers.state());
+                }
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::ModifiersChanged);
             }
             WindowEvent::Ime(ime_event) => {
                 debug!("IME event: {ime_event:?}");
+                #[cfg(target_os = "linux")]
+                if let Some(client) = self.ime_bridge_state.wayland_client {
+                    if self.ime_bridge_state.current_request.is_some()
+                        && let Some(host) = &self.linux_platform_views
+                    {
+                        host.borrow().route_ime(client, ime_event);
+                    }
+                    self.sync_wayland_ime();
+                    self.request_redraw_now();
+                    return;
+                }
                 if let Some(client) = self.ime_bridge_state.receive_event(&ime_event) {
                     self.ime_state.push_event_for(Some(client), ime_event);
                     self.flush_focused_input();
@@ -2578,6 +2772,22 @@ where
                 redraw_reasons.push(RedrawReason::ImeEvent);
             }
             WindowEvent::Focused(focused) => {
+                #[cfg(target_os = "linux")]
+                if !focused && let Some(host) = &self.linux_platform_views {
+                    host.borrow_mut().clear_input();
+                    if self.ime_bridge_state.wayland_client.is_some() {
+                        self.sync_wayland_ime();
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                if !focused
+                    && self
+                        .windows_platform_views
+                        .as_ref()
+                        .is_some_and(|host| !host.borrow().is_foreground())
+                {
+                    self.route_windows_pointer(|host| host.clear_input());
+                }
                 // Android reports the Activity window losing focus even when input
                 // moves to one of this renderer's own windowless view roots.
                 #[cfg(target_os = "android")]
@@ -3130,7 +3340,7 @@ mod tests {
             Some(3..5),
         );
 
-        let update = bridge.update_request(Some(request.clone()));
+        let update = bridge.update_request(None, Some(request.clone()));
 
         assert_eq!(
             update,
@@ -3156,9 +3366,9 @@ mod tests {
             Some(3..5),
         );
         let mut bridge = RendererImeBridgeState::default();
-        bridge.update_request(Some(request.clone()));
+        bridge.update_request(None, Some(request.clone()));
 
-        let update = bridge.update_request(Some(request.clone()));
+        let update = bridge.update_request(None, Some(request.clone()));
 
         assert_eq!(update, RendererImeBridgeUpdate::default());
         assert_eq!(bridge.request(), Some(&request));
@@ -3173,7 +3383,7 @@ mod tests {
             ime_request: Some(request.clone()),
             ..Default::default()
         });
-        let update = bridge.update_request(requests.ime_request);
+        let update = bridge.update_request(None, requests.ime_request);
         assert_eq!(
             update,
             RendererImeBridgeUpdate {
@@ -3183,7 +3393,7 @@ mod tests {
             }
         );
         assert_eq!(
-            bridge.update_request(Some(request)),
+            bridge.update_request(None, Some(request)),
             RendererImeBridgeUpdate::default()
         );
     }
@@ -3194,16 +3404,19 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let size = PxSize::new(Px(7), Px(13));
         let mut bridge = RendererImeBridgeState::default();
-        bridge.update_request(Some(positioned_request(
-            PxPosition::new(Px(12), Px(18)),
-            size,
-            2..6,
-            Some(3..5),
-        )));
+        bridge.update_request(
+            None,
+            Some(positioned_request(
+                PxPosition::new(Px(12), Px(18)),
+                size,
+                2..6,
+                Some(3..5),
+            )),
+        );
         let next_request =
             positioned_request(PxPosition::new(Px(12), Px(18)), size, 4..8, Some(5..7));
 
-        let update = bridge.update_request(Some(next_request.clone()));
+        let update = bridge.update_request(None, Some(next_request.clone()));
 
         assert_eq!(update.allowed, None);
         assert_eq!(update.cursor_area, None);
@@ -3211,7 +3424,7 @@ mod tests {
         assert_eq!(bridge.request(), Some(&next_request));
         let mut moved = next_request.clone();
         moved.position = Some(PxPosition::new(Px(20), Px(30)));
-        let update = bridge.update_request(Some(moved));
+        let update = bridge.update_request(None, Some(moved));
         assert_eq!(update.allowed, None);
         assert_eq!(update.text_state, None);
         assert_eq!(update.options, None);
@@ -3221,7 +3434,7 @@ mod tests {
         );
         let mut another_client = next_request.clone();
         another_client.client_id = Some(42);
-        let update = bridge.update_request(Some(another_client.clone()));
+        let update = bridge.update_request(None, Some(another_client.clone()));
         assert_eq!(update.allowed, Some(true));
         assert_eq!(
             update.cursor_area,
@@ -3237,11 +3450,11 @@ mod tests {
             Some(42)
         );
         assert_eq!(
-            bridge.update_request(Some(another_client.clone())),
+            bridge.update_request(None, Some(another_client.clone())),
             RendererImeBridgeUpdate::default()
         );
         another_client.text_state.text = "transformed edit".into();
-        let update = bridge.update_request(Some(another_client.clone()));
+        let update = bridge.update_request(None, Some(another_client.clone()));
         assert_eq!(update.text_state, Some(another_client.text_state));
         assert_eq!(update.allowed, None);
     }
@@ -3257,9 +3470,9 @@ mod tests {
             Some(3..5),
         );
         let mut bridge = RendererImeBridgeState::default();
-        bridge.update_request(Some(request));
+        bridge.update_request(None, Some(request));
 
-        let update = bridge.update_request(None);
+        let update = bridge.update_request(None, None);
 
         assert_eq!(
             update,
@@ -3272,5 +3485,24 @@ mod tests {
             }
         );
         assert_eq!(bridge.request(), None);
+    }
+
+    #[test]
+    fn ime_bridge_reopens_when_wayland_focus_moves_between_identical_editors() {
+        let request = positioned_request([12, 18].into(), PxSize::new(Px(7), Px(13)), 2..6, None);
+        let mut bridge = RendererImeBridgeState::default();
+        bridge.update_request(Some(1), Some(request.clone()));
+        assert_eq!(
+            bridge.update_request(Some(1), Some(request.clone())),
+            RendererImeBridgeUpdate::default()
+        );
+
+        let update = bridge.update_request(Some(2), Some(request.clone()));
+        assert_eq!(update.allowed, Some(true));
+        assert_eq!(update.cursor_area, Some(([12, 18].into(), request.size)));
+        assert_eq!(update.text_state, Some(request.text_state));
+
+        assert_eq!(bridge.update_request(Some(2), None).allowed, Some(false));
+        assert_eq!(bridge.update_request(None, None).allowed, None);
     }
 }

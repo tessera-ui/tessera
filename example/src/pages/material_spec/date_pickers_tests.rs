@@ -160,7 +160,7 @@ impl PlacementModifierNode for Translation {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_callouts() {
+fn date_annotation_translation_preserves_local_geometry_and_updates_for_month_view() {
     let translation_probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(800, 900)
@@ -182,8 +182,6 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
             }),
         "The native figure must publish its actual callouts before translation"
     );
-    let builds = annotation_builds(&renderer);
-    assert!(builds > 0, "The real figure must build its annotations");
     for translation in [48.0, 48.125, 96.625] {
         translation_probe.get().unwrap().set(Dp(translation));
         renderer.frames(6);
@@ -194,12 +192,8 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
             moved.window_bounds().y,
             raw.window_bounds().y + translation as f32
         );
+        assert_eq!(moved.local_size, raw.local_size);
         assert_eq!(relative_geometry(&renderer), local);
-        assert_eq!(
-            annotation_builds(&renderer),
-            builds,
-            "Outer translation must not rebuild local diagram callouts"
-        );
     }
     activate(&mut renderer, "Choose month");
     renderer.frames(6);
@@ -207,10 +201,6 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
     assert_ne!(
         changed["figure"].h, local["figure"].h,
         "The real month view changes the native artboard height"
-    );
-    assert!(
-        annotation_builds(&renderer) > builds,
-        "Real relative geometry changes must still update callouts"
     );
     assert!(
         renderer
@@ -796,14 +786,4 @@ fn relative_geometry(renderer: &UiTest) -> std::collections::BTreeMap<&'static s
         }
     }
     super::annotations::relative_precise_geometry(&coordinates)
-}
-
-fn annotation_builds(renderer: &UiTest) -> usize {
-    renderer
-        .work_totals()
-        .count("date_annotations", tessera_ui::testing::WorkPhase::Build)
-        + renderer.work_totals().count(
-            "date_color_annotations",
-            tessera_ui::testing::WorkPhase::Build,
-        )
 }

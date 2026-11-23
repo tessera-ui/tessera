@@ -87,7 +87,7 @@ impl CalendarOwner {
                     .filter_map(|day| month.to_date(day))
                     .find(|date| self.selectable(*date))
             })
-            .unwrap_or_else(|| month.to_date(1).expect("first calendar date"))
+            .unwrap_or_else(|| month.first_date())
     }
 }
 
@@ -102,7 +102,7 @@ impl CalendarFocus {
         Self {
             anchor,
             pending: None,
-            requester: requester.unwrap_or_else(FocusRequester::new),
+            requester: requester.unwrap_or_default(),
         }
     }
 }

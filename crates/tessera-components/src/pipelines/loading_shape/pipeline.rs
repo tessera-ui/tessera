@@ -3,7 +3,7 @@ use tessera_ui::{
     wgpu,
 };
 
-use crate::pipelines::instanced::{DrawBuffers, quad_pipeline, storage_layout};
+use crate::pipelines::instanced::{DrawBuffers, QuadPipeline, storage_layout};
 
 use super::{
     command::LoadingShapeCommand,
@@ -51,20 +51,17 @@ impl LoadingShapePipeline {
                 resource: buffer.as_entire_binding(),
             }],
         });
-        let shader = device.create_shader_module(wgpu::include_wgsl!("loading_shape.wgsl"));
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Loading Shape Pipeline Layout"),
-            bind_group_layouts: &[Some(&instance_layout), Some(&instance_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = quad_pipeline(
-            device,
-            &layout,
-            &shader,
-            config.format,
+        let pipeline = QuadPipeline {
+            label: "Loading Shape Pipeline",
+            layout_label: "Loading Shape Pipeline Layout",
+            format: config.format,
             sample_count,
             cache,
-            "Loading Shape Pipeline",
+        }
+        .create(
+            device,
+            &[Some(&instance_layout), Some(&instance_layout)],
+            wgpu::include_wgsl!("loading_shape.wgsl"),
             None,
             &[],
         );

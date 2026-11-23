@@ -1,4 +1,3 @@
-//! Switch theme colors and noninteractive accessibility regressions.
 //!
 //! ## Usage
 //!

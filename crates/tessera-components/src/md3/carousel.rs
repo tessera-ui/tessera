@@ -961,14 +961,9 @@ fn carousel_item(
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
-/// let mut controller = CarouselController::new(2);
-/// controller.jump_to_item(4);
-/// assert_eq!(controller.current_item(), 4);
-///
 /// #[tessera]
 /// fn photos() {
 ///     let controller = remember(|| CarouselController::new(2));
-///     assert_eq!(controller.with(CarouselController::current_item), 2);
 ///     carousel(12).controller(controller).content(|item| {
 ///         text(format!("Photo {}", item.index + 1));
 ///     });

@@ -472,7 +472,7 @@ fn behavior_section(action: State<String>, controller: State<BottomSheetControll
     gap(Dp(16.0));
     caption(I18N.format(
         "ui-last-sheet-action-value",
-        [("v0", I18N.text(&action.get()).into())],
+        [("v0", I18N.text(action.get()).into())],
     ));
 }
 
@@ -516,15 +516,11 @@ fn expansion_controls(controller: State<BottomSheetController>) {
             "ui-sheet-value",
             [(
                 "v0",
-                I18N.text(
-                    &(match (open, expansion) {
-                        (false, _) => "ui-closed",
-                        (true, BottomSheetExpansion::Expanded) => "ui-open-expanded-6986",
-                        (true, BottomSheetExpansion::PartiallyExpanded) => {
-                            "ui-open-partially-expanded"
-                        }
-                    }),
-                )
+                I18N.text(match (open, expansion) {
+                    (false, _) => "ui-closed",
+                    (true, BottomSheetExpansion::Expanded) => "ui-open-expanded-6986",
+                    (true, BottomSheetExpansion::PartiallyExpanded) => "ui-open-partially-expanded",
+                })
                 .into(),
             )],
         ),
@@ -732,7 +728,7 @@ fn sheet_content(close: Callback, action: State<String>) {
                 list_item()
                     .headline(I18N.text(label))
                     .accessibility_label(
-                        I18N.format("ui-bottom-sheet-value", [("v0", I18N.text(&label).into())]),
+                        I18N.format("ui-bottom-sheet-value", [("v0", I18N.text(label).into())]),
                     )
                     .leading(move || {
                         icon()
@@ -745,7 +741,7 @@ fn sheet_content(close: Callback, action: State<String>) {
                     })
                     .on_click(move || {
                         action.set(
-                            I18N.format("ui-value-selected", [("v0", I18N.text(&label).into())]),
+                            I18N.format("ui-value-selected", [("v0", I18N.text(label).into())]),
                         );
                         close.call();
                     });
@@ -1044,13 +1040,13 @@ fn touch_target() {
                 [(
                     "v0",
                     I18N.text(
-                        &(if controller.with(BottomSheetController::expansion)
+                        if controller.with(BottomSheetController::expansion)
                             == BottomSheetExpansion::Expanded
                         {
                             "ui-expanded"
                         } else {
                             "ui-partially-expanded"
-                        }),
+                        },
                     )
                     .into(),
                 )],

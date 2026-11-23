@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    num::NonZeroU64,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use encase::{ShaderType, UniformBuffer};
 use etagere::{AllocId, AtlasAllocator, size2};
@@ -339,21 +336,12 @@ impl ImageVectorPipeline {
         let key = AtlasKey::new(data, width, height);
         if let Some(entry) = self.cache.get_mut(&key) {
             entry.last_used = self.frame;
-            self.atlas
-                .pages
-                .get_mut(&entry.page_index)
-                .unwrap()
-                .last_used = self.frame;
+            self.atlas.page_mut(entry.page_index).last_used = self.frame;
             return;
         }
 
         let geometry = Self::create_resources(device, data);
-        let allocation = self.atlas.allocate(device, width, height);
-        self.atlas
-            .pages
-            .get_mut(&allocation.page_index)
-            .unwrap()
-            .last_used = self.frame;
+        let allocation = self.atlas.allocate(device, width, height, self.frame);
         self.rasterize_into_allocation(device, &geometry, &allocation, width, height);
         let page_size = self.atlas.page_texture(allocation.page_index).size();
         let uv_origin = [
@@ -478,9 +466,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 return true;
             }
             self.atlas
-                .pages
-                .get_mut(&entry.page_index)
-                .unwrap()
+                .page_mut(entry.page_index)
                 .allocator
                 .deallocate(entry.allocation);
             false
@@ -490,18 +476,18 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             .retain(|_, page| !page.allocator.is_empty());
         let mut bytes: u64 = self.atlas.pages.values().map(AtlasPage::bytes).sum();
         while bytes > ATLAS_CACHE_BYTES {
-            let oldest = self
+            let Some((&index, page)) = self
                 .atlas
                 .pages
                 .iter()
                 .filter(|(_, page)| page.last_used != self.frame)
                 .max_by_key(|(_, page)| self.frame.wrapping_sub(page.last_used))
-                .map(|(&index, _)| index);
-            let Some(index) = oldest else {
+            else {
                 // Pages sampled by this frame remain valid until submission.
                 break;
             };
-            bytes -= self.atlas.pages.remove(&index).unwrap().bytes();
+            bytes -= page.bytes();
+            self.atlas.pages.remove(&index);
         }
         self.cache
             .retain(|_, entry| self.atlas.pages.contains_key(&entry.page_index));
@@ -607,7 +593,7 @@ fn create_sample_bind_group(
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer,
                     offset: 0,
-                    size: NonZeroU64::new(AtlasSampleUniforms::min_size().get()),
+                    size: Some(AtlasSampleUniforms::min_size()),
                 }),
             },
         ],
@@ -688,6 +674,7 @@ impl VectorAtlas {
         device: &tessera_ui::render::GraphicsDevice,
         width: u32,
         height: u32,
+        frame: u64,
     ) -> AtlasAllocation {
         let padded_width = width.saturating_add(ATLAS_PADDING * 2).max(1);
         let padded_height = height.saturating_add(ATLAS_PADDING * 2).max(1);
@@ -713,6 +700,7 @@ impl VectorAtlas {
                 .allocator
                 .allocate(size2(padded_width as i32, padded_height as i32))
             {
+                page.last_used = frame;
                 return AtlasAllocation {
                     page_index: index,
                     region: allocation,
@@ -720,7 +708,7 @@ impl VectorAtlas {
             }
         }
 
-        let mut page = AtlasPage::new(device, page_size);
+        let mut page = AtlasPage::new(device, page_size, frame);
         let allocation = page
             .allocator
             .allocate(size2(padded_width as i32, padded_height as i32))
@@ -740,6 +728,12 @@ impl VectorAtlas {
     fn page_texture(&self, index: usize) -> &wgpu::Texture {
         &self.pages[&index].texture
     }
+
+    fn page_mut(&mut self, index: usize) -> &mut AtlasPage {
+        self.pages
+            .get_mut(&index)
+            .expect("vector atlas page exists")
+    }
 }
 
 struct AtlasPage {
@@ -754,7 +748,7 @@ impl AtlasPage {
         u64::from(self.texture.width()) * u64::from(self.texture.height()) * 4
     }
 
-    fn new(device: &tessera_ui::render::GraphicsDevice, size: u32) -> Self {
+    fn new(device: &tessera_ui::render::GraphicsDevice, size: u32, last_used: u64) -> Self {
         let texture = device.create_texture(
             "vector_atlas",
             &wgpu::TextureDescriptor {
@@ -779,7 +773,7 @@ impl AtlasPage {
             texture,
             view,
             allocator: AtlasAllocator::new(size2(size as i32, size as i32)),
-            last_used: 0,
+            last_used,
         }
     }
 }

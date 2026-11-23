@@ -3,7 +3,7 @@ use tessera_ui::{
     wgpu,
 };
 
-use crate::pipelines::instanced::quad_pipeline;
+use crate::pipelines::instanced::QuadPipeline;
 
 use super::command::PathStrokeCommand;
 
@@ -61,20 +61,17 @@ impl PathStrokePipeline {
                 })
                 .collect::<Vec<_>>(),
         });
-        let shader = device.create_shader_module(wgpu::include_wgsl!("path_stroke.wgsl"));
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Path Stroke Pipeline Layout"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let pipeline = quad_pipeline(
-            device,
-            &pipeline_layout,
-            &shader,
-            config.format,
+        let pipeline = QuadPipeline {
+            label: "Path Stroke Pipeline",
+            layout_label: "Path Stroke Pipeline Layout",
+            format: config.format,
             sample_count,
             cache,
-            "Path Stroke Pipeline",
+        }
+        .create(
+            device,
+            &[Some(&layout)],
+            wgpu::include_wgsl!("path_stroke.wgsl"),
             None,
             &[],
         );
@@ -197,12 +194,12 @@ impl DrawablePipeline<PathStrokeCommand> for PathStrokePipeline {
                     ))
                 })
                 .collect();
-            if path.is_empty() {
+            let Some(last) = path.last_mut() else {
                 continue;
-            }
+            };
             if !command.round && !command.closed {
-                path.first_mut().unwrap().2.caps[0] = 1.0;
-                path.last_mut().unwrap().2.caps[1] = 1.0;
+                last.2.caps[1] = 1.0;
+                path[0].2.caps[0] = 1.0;
             }
             let low = path
                 .iter()

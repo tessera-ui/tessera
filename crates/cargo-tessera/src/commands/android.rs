@@ -803,7 +803,7 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
     let rust_root = replace_path_separator(rust_root.into_os_string())
         .to_string_lossy()
         .into_owned();
-    let mut properties = String::from(GENERATED_HEADER.replace("//", "#"));
+    let mut properties = GENERATED_HEADER.replace("//", "#");
     for (key, value) in [
         ("applicationId", ctx.config.app().identifier().to_string()),
         ("versionCode", ctx.version_code.to_string()),

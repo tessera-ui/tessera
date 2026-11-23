@@ -182,7 +182,7 @@ fn toolbar_control(
             .accessibility_label(I18N.text(label))
             .on_click(move || {
                 selected.set(!selected.get());
-                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]));
             })
             .filled_tonal()
             .selected(selected.get())
@@ -211,7 +211,7 @@ fn toolbar_control(
             .icon(vector)
             .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]));
             })
             .filled();
     } else {
@@ -229,7 +229,7 @@ fn toolbar_control(
             .icon(vector)
             .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]));
             })
             .standard()
             .content_color(if vibrant {
@@ -368,12 +368,12 @@ fn baseline_figure() {
                                             .icon(vector)
                                             .accessibility_label(I18N.format(
                                                 "ui-baseline-value-format-430",
-                                                [("v0", I18N.text(&label).into())],
+                                                [("v0", I18N.text(label).into())],
                                             ))
                                             .on_click(move || {
                                                 notice.set(I18N.format(
                                                     "ui-baseline-value-activated",
-                                                    [("v0", I18N.text(&label).into())],
+                                                    [("v0", I18N.text(label).into())],
                                                 ))
                                             });
                                     }
@@ -489,13 +489,11 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                                     "ui-toolbar-value-figure",
                                     [(
                                         "v0",
-                                        I18N.text(
-                                            &(if measurements {
-                                                "ui-measurement-7071"
-                                            } else {
-                                                "ui-anatomy-7072"
-                                            }),
-                                        )
+                                        I18N.text(if measurements {
+                                            "ui-measurement-7071"
+                                        } else {
+                                            "ui-anatomy-7072"
+                                        })
                                         .into(),
                                     )],
                                 ),
@@ -1158,8 +1156,7 @@ fn fab_pair(
                     Dp(1.0),
                 ))
                 .on_click(move || {
-                    notice
-                        .set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+                    notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]))
                 })
                 .content(move || {
                     icon()
@@ -1649,7 +1646,7 @@ fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
             .filled()
             .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]))
             })
             .child(move || {
                 text(I18N.text(label));
@@ -1660,7 +1657,7 @@ fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
             .text()
             .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(label).into())]))
             })
             .child(move || {
                 text(I18N.text(label));
@@ -2008,7 +2005,7 @@ fn overflow_example() {
                             .on_click(move || {
                                 notice.set(I18N.format(
                                     "ui-value-selected",
-                                    [("v0", I18N.text(&label).into())],
+                                    [("v0", I18N.text(label).into())],
                                 ));
                                 open.set(false);
                             })
@@ -2044,7 +2041,7 @@ fn overflow_example() {
                                         .on_click(move || {
                                             notice.set(I18N.format(
                                                 "ui-value-selected",
-                                                [("v0", I18N.text(&label).into())],
+                                                [("v0", I18N.text(label).into())],
                                             ));
                                             open.set(false);
                                         })
@@ -2159,7 +2156,7 @@ fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
                             .on_click(move || {
                                 notice.set(I18N.format(
                                     "ui-value-activated",
-                                    [("v0", I18N.text(&label).into())],
+                                    [("v0", I18N.text(label).into())],
                                 ))
                             })
                             .standard();
@@ -3204,24 +3201,20 @@ fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
             ("v0", I18N.text(&title).into()),
             (
                 "v1",
-                I18N.text(
-                    &(match toolbar {
-                        MockBar::None => "",
-                        MockBar::Actions => "ui-with-a-floating-toolbar-of-actions",
-                        MockBar::Tabs => "ui-with-a-floating-toolbar-of-local-navigation",
-                    }),
-                )
+                I18N.text(match toolbar {
+                    MockBar::None => "",
+                    MockBar::Actions => "ui-with-a-floating-toolbar-of-actions",
+                    MockBar::Tabs => "ui-with-a-floating-toolbar-of-local-navigation",
+                })
                 .into(),
             ),
             (
                 "v2",
-                I18N.text(
-                    &(if nav_bar {
-                        "ui-above-a-navigation-bar"
-                    } else {
-                        ""
-                    }),
-                )
+                I18N.text(if nav_bar {
+                    "ui-above-a-navigation-bar"
+                } else {
+                    ""
+                })
                 .into(),
             ),
         ],

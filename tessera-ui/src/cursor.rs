@@ -65,7 +65,6 @@ pub struct CursorState {
 }
 
 impl CursorState {
-    /// Cleans up the cursor state at the end of a frame.
     pub(crate) fn frame_cleanup(&mut self) {
         if self.clear_position_on_next_frame {
             self.position = None;
@@ -82,7 +81,7 @@ impl CursorState {
                 .pointer_positions
                 .get(&event.pointer_id)
                 .copied()
-                .unwrap_or_else(|| {
+                .unwrap_or({
                     if event.pointer_id == MOUSE_POINTER_ID {
                         None
                     } else {
@@ -308,7 +307,6 @@ pub struct PointerChange {
     ///
     /// Touch scrolling reports [`GestureState::Dragged`].
     pub gesture_state: GestureState,
-    /// Whether this change has been consumed by a handler.
     pub(crate) consumed: bool,
     pub(crate) tap_claimed: bool,
     pub(crate) scroll_discrete: Option<bool>,

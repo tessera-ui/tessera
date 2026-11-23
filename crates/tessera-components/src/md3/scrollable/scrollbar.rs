@@ -611,31 +611,6 @@ fn handle_press(
 ///   absent.
 ///
 /// Without a viewport, wheel input passes to ancestors.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::scrollable::{ScrollableController, scrollbar_v};
-/// use tessera_components::md3::theme::material_theme;
-/// use tessera_ui::{Px, PxPosition, remember, tessera};
-/// #[tessera]
-/// fn tracked_content() {
-///     material_theme().child(|| {
-///         let controller = remember(ScrollableController::new);
-///         let offset = PxPosition::new(Px::ZERO, Px(-40));
-///         controller.with_mut(|controller| controller.set_scroll_position(offset));
-///         assert_eq!(
-///             controller.with(|controller| controller.child_position()),
-///             offset
-///         );
-///         scrollbar_v()
-///             .controller(controller)
-///             .total(Px(600))
-///             .visible(Px(200));
-///     });
-/// }
-/// # tessera_ui::testing::UiTest::new().content(tracked_content).frame();
-/// ```
 #[tessera]
 pub fn scrollbar_v(
     total: Option<Px>,
@@ -687,31 +662,6 @@ pub fn scrollbar_v(
 ///   absent.
 ///
 /// Without a viewport, wheel input passes to ancestors.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::scrollable::{ScrollableController, scrollbar_h};
-/// use tessera_components::md3::theme::material_theme;
-/// use tessera_ui::{Px, PxPosition, remember, tessera};
-/// #[tessera]
-/// fn tracked_content() {
-///     material_theme().child(|| {
-///         let controller = remember(ScrollableController::new);
-///         let offset = PxPosition::new(Px(-40), Px::ZERO);
-///         controller.with_mut(|controller| controller.set_scroll_position(offset));
-///         assert_eq!(
-///             controller.with(|controller| controller.child_position()),
-///             offset
-///         );
-///         scrollbar_h()
-///             .controller(controller)
-///             .total(Px(600))
-///             .visible(Px(200));
-///     });
-/// }
-/// # tessera_ui::testing::UiTest::new().content(tracked_content).frame();
-/// ```
 #[tessera]
 pub fn scrollbar_h(
     total: Option<Px>,
@@ -935,7 +885,7 @@ fn scrollbar(
     )
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
-        state: state,
+        state,
         orientation,
     });
 

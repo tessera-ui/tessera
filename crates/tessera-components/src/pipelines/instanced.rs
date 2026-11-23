@@ -66,7 +66,7 @@ impl<T: Pod> InstancePages<T> {
         let limits = device.limits();
         let max_bytes = limits
             .max_buffer_size
-            .min(u64::from(limits.max_storage_buffer_binding_size));
+            .min(limits.max_storage_buffer_binding_size);
         Self {
             layout,
             pages: Vec::new(),
@@ -162,20 +162,17 @@ pub(super) fn storage_quad_pipeline(
     label: &str,
 ) -> (wgpu::BindGroupLayout, wgpu::RenderPipeline) {
     let layout = storage_layout(device, label);
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some(label),
-        bind_group_layouts: &[Some(&layout)],
-        immediate_size: 0,
-    });
-    let shader = device.create_shader_module(shader);
-    let pipeline = quad_pipeline(
-        device,
-        &pipeline_layout,
-        &shader,
+    let pipeline = QuadPipeline {
+        label,
+        layout_label: label,
         format,
         sample_count,
         cache,
-        label,
+    }
+    .create(
+        device,
+        &[Some(&layout)],
+        shader,
         Some(wgpu::Face::Back),
         &[],
     );
@@ -189,50 +186,63 @@ pub(super) const QUAD_VERTICES: &[Option<wgpu::VertexBufferLayout<'_>>] =
         attributes: &wgpu::vertex_attr_array![0 => Float32x2],
     })];
 
-pub(super) fn quad_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    shader: &wgpu::ShaderModule,
-    format: wgpu::TextureFormat,
-    sample_count: u32,
-    cache: Option<&wgpu::PipelineCache>,
-    label: &str,
-    cull_mode: Option<wgpu::Face>,
-    buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
-) -> wgpu::RenderPipeline {
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(label),
-        layout: Some(layout),
-        vertex: wgpu::VertexState {
-            module: shader,
-            entry_point: Some("vs_main"),
-            buffers,
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: shader,
-            entry_point: Some("fs_main"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: Default::default(),
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode,
-            ..Default::default()
-        },
-        depth_stencil: tessera_ui::render::ui_stencil_state(),
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            ..Default::default()
-        },
-        multiview_mask: None,
-        cache,
-    })
+pub(super) struct QuadPipeline<'a> {
+    pub label: &'a str,
+    pub layout_label: &'a str,
+    pub format: wgpu::TextureFormat,
+    pub sample_count: u32,
+    pub cache: Option<&'a wgpu::PipelineCache>,
+}
+
+impl QuadPipeline<'_> {
+    pub(super) fn create(
+        self,
+        device: &wgpu::Device,
+        bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+        shader: wgpu::ShaderModuleDescriptor<'_>,
+        cull_mode: Option<wgpu::Face>,
+        buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
+    ) -> wgpu::RenderPipeline {
+        let shader = device.create_shader_module(shader);
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(self.layout_label),
+            bind_group_layouts,
+            immediate_size: 0,
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(self.label),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers,
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: self.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode,
+                ..Default::default()
+            },
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
+            multisample: wgpu::MultisampleState {
+                count: self.sample_count,
+                ..Default::default()
+            },
+            multiview_mask: None,
+            cache: self.cache,
+        })
+    }
 }
 
 pub(super) struct DrawBuffers<T> {

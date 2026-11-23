@@ -78,8 +78,8 @@ mod time_pickers;
 mod toolbars;
 mod tooltips;
 
-const BACKGROUND: Color = Color::from_rgb(0.991102097, 0.964686248, 1.000000000);
-const PANEL: Color = Color::from_rgb(0.938685728, 0.879622397, 0.921581856);
+const BACKGROUND: Color = Color::from_rgb(0.991_102_1, 0.964_686_3, 1.000000000);
+const PANEL: Color = Color::from_rgb(0.938_685_7, 0.879_622_4, 0.921_581_86);
 const INK: Color = Color::from_rgb(0.011612245, 0.010960094, 0.012286488);
 const ACCENT: Color = Color::from_rgb(0.1356333, 0.08021982, 0.3712377);
 

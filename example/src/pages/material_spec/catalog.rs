@@ -303,7 +303,7 @@ pub(crate) fn component_article(
                             role: Some(tessera_ui::accesskit::Role::Group),
                             label: Some(I18N.format(
                                 "ui-value-specifications",
-                                [("v0", I18N.text(&component.title).into())],
+                                [("v0", I18N.text(component.title).into())],
                             )),
                             merge_descendants: true,
                             ..Default::default()
@@ -543,7 +543,7 @@ fn component_card(component: Component, index: usize, on_open: CallbackWith<usiz
         .on_click(move || on_open.call(index))
         .accessibility_label(I18N.format(
             "ui-open-value-specifications",
-            [("v0", I18N.text(&component.title).into())],
+            [("v0", I18N.text(component.title).into())],
         ))
         .child(move || {
             column()

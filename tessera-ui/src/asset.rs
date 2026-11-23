@@ -255,7 +255,9 @@ impl<T: Clone + Send + 'static> Resource<T> {
     }
 }
 
-struct ResourceCache<T: 'static>(RefCell<HashMap<(Source, usize), Weak<ResourceEntry<T>>>>);
+type ResourceEntries<T> = HashMap<(Source, usize), Weak<ResourceEntry<T>>>;
+
+struct ResourceCache<T: 'static>(RefCell<ResourceEntries<T>>);
 
 impl<T> Default for ResourceCache<T> {
     fn default() -> Self {

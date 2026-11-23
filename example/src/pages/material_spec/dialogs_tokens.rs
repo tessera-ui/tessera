@@ -162,7 +162,7 @@ fn token_menu(
                             .child(move || {
                                 let open =
                                     expanded.with(|state| state[selected.get()][group_index]);
-                                text(I18N.format("ui-value-value", [("v0", I18N.text(&(if open { "−" } else { "+" })).into()), ("v1", I18N.text(&group).into())]));
+                                text(I18N.format("ui-value-value", [("v0", I18N.text(if open { "−" } else { "+" }).into()), ("v1", I18N.text(group).into())]));
                             });
                         if open {
                             token_group(selected.get(), group_index);
@@ -200,8 +200,8 @@ fn token_group(index: usize, group_index: usize) {
         text(I18N.format(
             "ui-value-value-format-31",
             [
-                ("v0", I18N.text(&group).into()),
-                ("v1", I18N.text(&section).into()),
+                ("v0", I18N.text(group).into()),
+                ("v1", I18N.text(section).into()),
             ],
         ))
         .style(type_style(14.0, 20.0));

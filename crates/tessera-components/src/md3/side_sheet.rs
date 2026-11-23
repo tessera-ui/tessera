@@ -70,21 +70,6 @@ pub enum SideSheetPosition {
 }
 
 /// Controller for side sheet providers, managing open/closed state.
-///
-/// # Example
-///
-/// ```
-/// use tessera_components::md3::side_sheet::SideSheetController;
-///
-/// let session = tessera_ui::RuntimeSession::new();
-/// let _scope = session.enter();
-/// let mut controller = SideSheetController::new(false);
-/// assert!(!controller.is_open());
-/// controller.open();
-/// assert!(controller.is_open());
-/// controller.close();
-/// assert!(!controller.is_open());
-/// ```
 #[derive(Clone, PartialEq)]
 pub struct SideSheetController {
     is_open: bool,
@@ -240,7 +225,6 @@ fn compute_side_sheet_x(
     x + drag_offset
 }
 
-/// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>)> {
     Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
         let mut handled = false;
@@ -414,22 +398,20 @@ fn place_side_sheet_if_present(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::side_sheet::{SideSheetController, modal_side_sheet_provider};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, modal_side_sheet_provider}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         modal_side_sheet_provider()
 ///             .accessibility_label("Filters")
-///             .on_close_request(|| {})
 ///             .controller(remember(|| SideSheetController::new(true)))
 ///             .max_width(tessera_ui::Dp(360.0))
 ///             .content_padding(tessera_ui::Dp::ZERO)
-///             .main_content(|| { /* main content */ })
-///             .side_sheet_content(|| { /* side sheet content */ });
+///             .main_content(|| text("Main content"))
+///             .side_sheet_content(|| text("Filter options"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn modal_side_sheet_provider(
@@ -480,20 +462,18 @@ pub fn modal_side_sheet_provider(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::side_sheet::{SideSheetController, standard_side_sheet_provider};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, standard_side_sheet_provider}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         standard_side_sheet_provider()
 ///             .accessibility_label("Details")
-///             .on_close_request(|| {})
 ///             .controller(remember(|| SideSheetController::new(true)))
-///             .main_content(|| { /* main content */ })
-///             .side_sheet_content(|| { /* side sheet content */ });
+///             .main_content(|| text("Main content"))
+///             .side_sheet_content(|| text("Details"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn standard_side_sheet_provider(

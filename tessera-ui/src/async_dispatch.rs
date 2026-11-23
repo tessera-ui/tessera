@@ -93,13 +93,15 @@ pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + '
             // Each IO task owns a blocking-capable thread, so it may block
             // while still driving Tokio IO resources.
             let runtime = executor(dispatcher).handle().clone();
-            let _ = runtime
-                .clone()
-                .spawn_blocking(move || runtime.block_on(future));
+            drop(
+                runtime
+                    .clone()
+                    .spawn_blocking(move || runtime.block_on(future)),
+            );
         }
         #[cfg(not(target_family = "wasm"))]
         Dispatcher::Default => {
-            let _ = executor(dispatcher).spawn(future);
+            drop(executor(dispatcher).spawn(future));
         }
         #[cfg(target_family = "wasm")]
         Dispatcher::Io | Dispatcher::Default => wasm_bindgen_futures::spawn_local(future),
@@ -190,7 +192,6 @@ impl<F: Future> Future for SessionScoped<F> {
 }
 
 slotmap::new_key_type! {
-    /// A task in a UI session's executor.
     pub(crate) struct TaskKey;
 }
 
@@ -309,7 +310,6 @@ fn poll_batch(
     polled
 }
 
-/// Polls the tasks woken since the last call.
 pub(crate) fn run_ready(queue: &crate::dispatcher::DispatchQueue) {
     let tasks = crate::local_runtime_resource::<UiTasks>();
     poll_batch(&tasks, &tasks.ready, |keys| queue.take_ready(keys));
@@ -329,7 +329,6 @@ pub(crate) fn poll_now(task: &Task) {
     poll_task(&tasks, key);
 }
 
-/// Resumes the tasks waiting in [`with_frame_time`] for the current frame.
 pub(crate) fn resume_frame_waiters() {
     let tasks = crate::local_runtime_resource::<UiTasks>();
     tasks.frames_resumed.set(tasks.frames_resumed.get() + 1);
@@ -339,7 +338,6 @@ pub(crate) fn resume_frame_waiters() {
     tasks.resumed_last_frame.set(resumed);
 }
 
-/// Returns whether a live task waits for the next frame.
 pub(crate) fn has_frame_waiters() -> bool {
     frame_waiter_count() > 0
 }

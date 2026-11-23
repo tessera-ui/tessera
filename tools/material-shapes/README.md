@@ -1,14 +1,10 @@
-# Loading shape data
+# Maintaining generated shape assets
 
-`GenerateLoadingShapes.java` regenerates the loading indicator's matched cubic
-curves. This offline tool is not needed to build or run Tessera.
+These offline tools regenerate shape assets used by Tessera components; they are
+not needed to build or run Tessera.
 
-The shape definitions follow [MaterialShapes.kt](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/MaterialShapes.kt),
-inspected on 2026-10-17. Shape normalization and feature matching use the
-official AndroidX Graphics Shapes 1.1.0 library. The first seven records form the
-repeating sequence: soft burst, nine-sided cookie, pentagon, pill, sunny,
-four-sided cookie, and oval. Record eight morphs an 18-degree rotated ten-vertex
-circle into the soft burst for determinate progress.
+The loading shapes follow [MaterialShapes.kt](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/MaterialShapes.kt).
+The source material is credited in the adjacent asset notices.
 
 ## Regeneration
 
@@ -27,40 +23,20 @@ From the repository root, replace both `/external/...` paths and run:
 java -cp "/external/dependencies/*" tools/material-shapes/GenerateLoadingShapes.java crates/tessera-components/assets/material_loading_shapes.bin /external/qa/loading-shapes-reference.svg
 ```
 
-The SVG shows each sequence at progress zero, one half, and one, without display
-rotation. It is a reference artifact and is not included in the library.
-
 The committed binary's SHA-256 is
 `3ff5fdb60f54e57e1782fd82d1a2f3c914462e64a3383cdd3cfef8d77c7c64a7`.
 Regeneration with the pinned dependencies must reproduce it byte for byte.
 
-## Binary format
-
-All numbers are little-endian. The file starts with `MLI1`, a 32-bit sequence
-count of eight, and eight 12-byte records containing a 32-bit cubic offset,
-32-bit cubic count, and 32-bit floating-point drawing scale. The remaining data
-contains 322 matched cubic pairs. Each pair stores eight starting coordinates
-and eight ending coordinates as 32-bit floats, in anchor/control/control/anchor
-order. The header occupies 104 bytes; each pair occupies 64 bytes.
-
-The drawing scale includes the 38/48 active-size ratio and the rotation-safe
-bounds factor.
-
 See [the asset notice](../../crates/tessera-components/assets/material_loading_shapes.NOTICE)
 and [Apache 2.0 license](../../crates/tessera-components/assets/material_loading_shapes.LICENSE).
 
-## Circular wave regression reference
+## Circular wave validation data
 
 `GenerateCircularWaveReference.java` uses the same pinned dependencies.
 
 ```sh
 java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveReference.java crates/tessera-components/assets/circular_wave_reference.bin
 ```
-
-The little-endian file starts with `MCW1` and a 32-bit case count. Each case
-contains a 32-bit vertex count, the circle outline, and five morph outlines.
-Each outline has a 32-bit cubic count followed by eight floats per cubic in
-anchor/control/control/anchor order.
 
 The fixture's SHA-256 is
 `2f3f39249b5ca45deaa4683f46c29411f21a8e592d3a047a63418918418881c3`.

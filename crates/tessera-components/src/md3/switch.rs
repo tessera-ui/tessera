@@ -335,11 +335,9 @@ impl tessera_ui::LayoutPolicy for SwitchThumbLayout {
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         let checked = remember(|| false);
-///         assert!(!checked.get());
 ///         switch(checked.get()).on_toggle(move |value| checked.set(value));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn switch(
@@ -501,7 +499,6 @@ fn switch_content(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            ..Default::default()
         };
         modifier = modifier.toggleable(toggle_args);
     } else {

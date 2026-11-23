@@ -24,7 +24,6 @@ struct QueueState {
 pub(crate) struct DispatchQueue(Mutex<QueueState>);
 
 impl DispatchQueue {
-    /// Queues a woken UI task without allocating once the buffer has grown.
     pub(crate) fn schedule(&self, task: crate::async_dispatch::TaskKey) {
         let wake = {
             let mut state = self.0.lock();
@@ -89,8 +88,6 @@ impl Default for DispatchQueue {
     }
 }
 
-/// Registers the active session's queue and returns its identity for
-/// [`dispatch_to_session`].
 pub(crate) fn register_current() -> u128 {
     let queue = crate::shared_runtime_resource::<DispatchQueue>();
     let identity = crate::session::current_session_identity().expect("active UI session");

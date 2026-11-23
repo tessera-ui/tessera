@@ -67,7 +67,7 @@ fn example(tone: u8, #[prop(into)] note: String, content: RenderSlot) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            panel(content.clone());
+            panel(content);
             gap(Dp(12.0));
             verdict(tone, note.clone());
         });
@@ -78,8 +78,6 @@ fn pair(left: RenderSlot, right: RenderSlot) {
     row()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            let left = left.clone();
-            let right = right.clone();
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
@@ -153,7 +151,6 @@ fn form(outlined: bool, mixed: bool) {
         });
 }
 
-/// Separate filled and outlined regions instead of mixing them in one form.
 #[tessera]
 pub(super) fn variant_regions() {
     pair(
@@ -180,8 +177,6 @@ pub(super) fn variant_regions() {
     );
 }
 
-/// Show labels that are truncated or wrapped instead of short and fully
-/// visible.
 #[tessera]
 pub(super) fn label_misuse() {
     pair(
@@ -219,7 +214,6 @@ pub(super) fn label_misuse() {
     );
 }
 
-/// Replace supporting text with error text instead of stacking both.
 #[tessera]
 pub(super) fn error_swap() {
     pair(
@@ -275,7 +269,6 @@ pub(super) fn error_swap() {
     );
 }
 
-/// Compare an outline that meets 3:1 contrast with one that does not.
 #[tessera]
 pub(super) fn outline_contrast() {
     pair(
@@ -300,7 +293,6 @@ pub(super) fn outline_contrast() {
     );
 }
 
-/// Editable single-line, multi-line and fixed-height text area inputs.
 #[tessera]
 pub(super) fn input_modes() {
     input_mode(0);

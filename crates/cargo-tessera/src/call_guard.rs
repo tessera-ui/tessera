@@ -321,10 +321,6 @@ pub(super) struct AnalysisJob {
     pub(super) call_index: types::CallIndex,
 }
 
-/// Checks the files of `jobs` in parallel and returns diagnostics per job.
-///
-/// Files rather than jobs are distributed so one large crate does not
-/// serialize the run.
 pub(super) fn analyze_parallel(
     db: &ra_ap_ide::RootDatabase,
     vfs: &ra_ap_vfs::Vfs,

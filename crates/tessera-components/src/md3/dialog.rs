@@ -391,7 +391,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::dialog::{DialogController, basic_dialog, dialog_provider};
+/// use tessera_components::md3::{dialog::{DialogController, basic_dialog, dialog_provider}, text::text};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::remember;
 ///
@@ -400,9 +400,8 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// #     .child(|| {
 /// dialog_provider()
 ///     .accessibility_label("Dialog Title")
-///     .on_close_request(|| {})
 ///     .controller(remember(|| DialogController::new(true)))
-///     .main_content(|| { /* main content */ })
+///     .main_content(|| text("Main content"))
 ///     .dialog_content(|dialog| {
 ///         basic_dialog().dialog(dialog)
 ///             .supporting_text("This is the dialog body text.")
@@ -410,7 +409,6 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///     });
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn dialog_provider(
@@ -576,11 +574,8 @@ fn dialog_provider_render(
 ///                     text("Event details");
 ///                 });
 ///             });
-///         close.call();
-///         assert!(!open.with(DialogController::is_open));
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(example).frame();
 /// ```
 #[tessera]
 pub fn full_screen_dialog(
@@ -672,30 +667,7 @@ pub fn full_screen_dialog(
 /// - `confirm_button` — optional confirm button slot.
 /// - `dismiss_button` — optional dismiss button slot.
 ///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::{button::button, dialog::basic_dialog, text::text};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// basic_dialog()
-///     .supporting_text("This is the dialog body text.")
-///     .headline("Dialog Title")
-///     .confirm_button(|| {
-///         button().filled().on_click(|| {}).child(|| {
-///             text("Confirm");
-///         });
-///     });
-/// #     });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
+/// See [`dialog_provider`] for usage.
 #[tessera]
 pub fn basic_dialog(
     dialog: Option<DialogScope>,

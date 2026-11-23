@@ -529,7 +529,6 @@ impl PlatformViewHost {
     }
 }
 
-/// Failure while registering or releasing an Android native platform view.
 #[derive(Debug)]
 pub(crate) struct AndroidPlatformViewError(String);
 

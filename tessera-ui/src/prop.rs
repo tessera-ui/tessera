@@ -1,8 +1,4 @@
-//! Component prop and replay abstractions.
-//!
-//! ## Usage
-//!
-//! Stable callback and render-slot handles for component props.
+//! Callback and render-slot handles for component props.
 
 use std::{any::Any, marker::PhantomData, ptr, rc::Rc};
 
@@ -200,39 +196,7 @@ where
 ///
 /// The parent decides whether, when, and where content expands. Captures must
 /// be owned and static; capture stable state handles for changing data.
-///
-/// Stored content owns its captures. Move local values into its closure:
-///
-/// ```compile_fail
-/// use tessera_ui::{RenderSlot, tessera};
-///
-/// #[tessera]
-/// fn host(child: Option<RenderSlot>) {}
-///
-/// #[tessera]
-/// fn app() {
-///     let label = String::from("Title");
-///     host().child(|| { let _ = label.len(); });
-/// }
-/// ```
-///
-/// A configuration handle cannot be used in place of deferred child content:
-///
-/// ```compile_fail
-/// use tessera_ui::{RenderSlot, tessera};
-///
-/// #[tessera]
-/// fn host(child: Option<RenderSlot>) {}
-///
-/// #[tessera]
-/// fn leaf() {}
-///
-/// #[tessera]
-/// fn app() {
-///     host().child(leaf());
-/// }
-/// ```
-///
+/// Pass a closure that builds the content, not a component's configuration handle.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct RenderSlot {
     repr: RenderSlotRepr,
@@ -454,7 +418,6 @@ where
     }
 }
 
-/// Declared props taken out of the pending table for one execution.
 pub(crate) trait PendingProps {
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn run(&mut self);

@@ -52,18 +52,22 @@ pub enum NavigationDrawerStyle {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::navigation_drawer::{navigation_drawer, navigation_drawer_item};
+/// use tessera_components::md3::{navigation_drawer::{navigation_drawer, navigation_drawer_item}, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn navigation() {
 ///     let selected = remember(|| 0usize);
-///     navigation_drawer().content(move || {
+///     material_theme().child(move || navigation_drawer().content(move || {
 ///         navigation_drawer_item()
 ///             .label("Inbox")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
-///     });
+///         navigation_drawer_item()
+///             .label("Archive")
+///             .selected(selected.get() == 1)
+///             .on_click(move || selected.set(1));
+///     }));
 /// }
 /// ```
 #[tessera]
@@ -112,7 +116,7 @@ pub fn navigation_drawer(
                         .fill_max_width()
                         .padding_symmetric(Dp(12.0), Dp(12.0)),
                 )
-                .children_shared(content.clone().unwrap_or_else(RenderSlot::empty));
+                .children_shared(content.unwrap_or_else(RenderSlot::empty));
         });
 }
 
@@ -133,22 +137,6 @@ pub fn navigation_drawer(
 /// - `on_click` — destination activation callback.
 /// - `icon` — optional 24dp leading icon.
 /// - `badge` — optional trailing count or status.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::navigation_drawer::navigation_drawer_item;
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn destination() {
-///     let selected = remember(|| false);
-///     navigation_drawer_item()
-///         .label("Saved")
-///         .selected(selected.get())
-///         .on_click(move || selected.set(true));
-/// }
-/// ```
 #[tessera]
 pub fn navigation_drawer_item(
     modifier: Option<Modifier>,

@@ -1,4 +1,3 @@
-//! Badge geometry, theme, and semantic regressions.
 //!
 //! ## Usage
 //!

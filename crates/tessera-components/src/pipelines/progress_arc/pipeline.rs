@@ -10,7 +10,7 @@ use tessera_ui::{
 
 use crate::pipelines::{
     SharedQuad,
-    instanced::{QUAD_VERTICES, quad_pipeline, storage_layout},
+    instanced::{QUAD_VERTICES, QuadPipeline, storage_layout},
 };
 
 use super::command::{ProgressArcCap, ProgressArcCommand};
@@ -49,24 +49,19 @@ impl ProgressArcPipeline {
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
     ) -> Self {
-        let shader = gpu.create_shader_module(include_wgsl!("progress_arc.wgsl"));
-
         let bind_group_layout = storage_layout(gpu, "progress_arc_bind_group_layout");
 
-        let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Progress Arc Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = quad_pipeline(
-            gpu,
-            &pipeline_layout,
-            &shader,
-            config.format,
+        let pipeline = QuadPipeline {
+            label: "Progress Arc Pipeline",
+            layout_label: "Progress Arc Pipeline Layout",
+            format: config.format,
             sample_count,
-            pipeline_cache,
-            "Progress Arc Pipeline",
+            cache: pipeline_cache,
+        }
+        .create(
+            gpu,
+            &[Some(&bind_group_layout)],
+            include_wgsl!("progress_arc.wgsl"),
             Some(wgpu::Face::Back),
             QUAD_VERTICES,
         );

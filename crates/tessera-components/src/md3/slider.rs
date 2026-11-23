@@ -1437,20 +1437,18 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// # fn component() {
 /// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_components::md3::slider::slider;
-/// use tessera_ui::{Dp, LayoutResult, Modifier};
+/// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// slider(0.5)
+/// let value = remember(|| 0.5);
+/// slider(value.get())
 ///     .modifier(Modifier::new().width(Dp(200.0)))
-///     .on_change(|new_value| {
-///         assert!((0.0..=1.0).contains(&new_value));
-///     });
+///     .on_change(move |new_value| value.set(new_value));
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn slider(
@@ -1909,9 +1907,6 @@ fn measure_centered_slider(
 ///
 /// let current_value = remember(|| 0.5f32);
 ///
-/// current_value.set(0.75);
-/// assert_eq!(current_value.get(), 0.75);
-///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(move || {
@@ -1921,11 +1916,8 @@ fn measure_centered_slider(
 ///         current_value.set(new_value);
 ///     });
 ///
-/// current_value.set(0.25);
-/// assert_eq!(current_value.get(), 0.25);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn centered_slider(
@@ -2382,10 +2374,8 @@ fn measure_range_slider(
 ///     .on_change(move |(start, end)| {
 ///         range_value.set((start, end));
 ///     });
-/// assert_eq!(range_value.get(), (0.2, 0.8));
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn range_slider(
