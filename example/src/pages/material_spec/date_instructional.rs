@@ -6,7 +6,7 @@ use tessera_components::{
             CalendarDate, DatePickerController, DatePickerDisplayMode, DockedDatePickerView,
             Weekday, YearMonth, date_picker_day, date_picker_dialog, docked_date_picker,
         },
-        dialog::DialogController,
+        dialog::{DialogController, dialog},
         icon::icon,
         icon_button::icon_button,
         material_icons::filled,
@@ -35,7 +35,6 @@ use crate::res::I18N;
 
 use super::super::{
     annotations::{self, PreciseGeometry, watch_precise},
-    article::modal_host::hosted_dialog,
     type_style,
 };
 
@@ -67,24 +66,19 @@ impl FieldGeometry {
 }
 
 #[tessera]
-pub(super) fn illustration(
-    kind: Illustration,
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+pub(super) fn illustration(kind: Illustration) {
     match kind {
         Illustration::EntryMethods => {
-            entry_methods().modal_controller_optional(modal_controller);
+            entry_methods();
         }
         Illustration::Formatting => {
-            formatting().modal_controller_optional(modal_controller);
+            formatting();
         }
         Illustration::Clear => {
             optional_clear();
         }
         Illustration::Labels => {
-            field_labels().modal_controller_optional(modal_controller);
+            field_labels();
         }
     }
 }
@@ -313,20 +307,13 @@ fn calendar_dialog(
     open: State<DialogController>,
     state: State<DatePickerController>,
     on_confirm: Callback,
-    content: RenderSlot,
-
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
 ) {
-    hosted_dialog(open)
-        .modal_controller_optional(modal_controller)
+    dialog(move || open.with_mut(DialogController::close))
+        .controller(open)
+        .padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-optional-date-selection"))
-        .on_close_request(move || open.with_mut(DialogController::close))
-        .main_content_shared(content)
-        .dialog_content(move |dialog_scope| {
+        .content(move || {
             date_picker_dialog()
-                .dialog(dialog_scope)
                 .controller(state)
                 .picker_today(CalendarDate::new(2023, 8, 1).unwrap())
                 .picker_first_day_of_week(Weekday::Sunday)
@@ -355,30 +342,15 @@ fn calendar_dialog(
 }
 
 #[tessera]
-fn entry_methods(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn entry_methods() {
     let controller = remember(|| initial_controller("08/17/2023"));
     let draft = remember(|| "08/17/2023".to_owned());
     let error = remember(String::new);
     let state = remember(|| initial_state(2023));
     let open = remember(|| DialogController::new(false));
     let geometry = remember(PreciseGeometry::new);
-    calendar_dialog(
-        open,
-        state,
-        Callback::new(move || {
-            if let Some(date) = state.with(DatePickerController::selected_date) {
-                let value = format_date(date, false);
-                error.set(String::new());
-                draft.set(value.clone());
-                controller.with_mut(|controller| controller.set_text(&value));
-            }
-        }),
-        RenderSlot::new(move || {
-            canvas(
+    {
+        canvas(
                 "ui-date-entry-methods-diagram".into(),
                 geometry,
                 RenderSlot::new(move || {
@@ -416,19 +388,26 @@ fn entry_methods(
                     annotation_contour(
                         "M461.5 118 H509.5 A6 6 0 0 1 515.5 124 V176 A6 6 0 0 1 509.5 182 H461.5 A6 6 0 0 1 455.5 176 V124 A6 6 0 0 1 461.5 118 Z".into(),
                     );
+                    calendar_dialog(
+                        open,
+                        state,
+                        Callback::new(move || {
+                            if let Some(date) = state.with(DatePickerController::selected_date) {
+                                let value = format_date(date, false);
+                                error.set(String::new());
+                                draft.set(value.clone());
+                                controller.with_mut(|controller| controller.set_text(&value));
+                            }
+                        }),
+                    );
                 }),
             )
             .width(1353.0);
-        }),
-    ).modal_controller_optional(modal_controller);
+    }
 }
 
 #[tessera]
-fn formatting(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn formatting() {
     let raw = remember(|| initial_controller("08172023"));
     let formatted = remember(|| initial_controller("08/17/2023"));
     let raw_draft = remember(|| "08172023".to_owned());
@@ -452,77 +431,76 @@ fn formatting(
             raw_error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
         }
     });
-    calendar_dialog(
-        open,
-        state,
-        Callback::new(move || {
-            if let Some(date) = state.with(DatePickerController::selected_date) {
-                raw_error.set(String::new());
-                formatted_error.set(String::new());
-                let value = format_date(date, false);
-                raw_draft.set(value.clone());
-                formatted_draft.set(value.clone());
-                raw.with_mut(|controller| controller.set_text(&value));
-                formatted.with_mut(|controller| controller.set_text(&value));
-            }
-        }),
-        RenderSlot::new(move || {
-            canvas(
-                "ui-deferred-date-formatting-diagram".into(),
-                geometry,
-                RenderSlot::new(move || {
-                    date_field(
-                        raw,
-                        open,
-                        geometry,
-                        FieldGeometry::Raw,
-                        "ui-date".into(),
-                        "ui-unformatted-date".into(),
-                        "MM/DD/YYYY".into(),
-                        167.0,
-                        62.0,
-                        CallbackWith::new(move |value: String| {
-                            raw_error.set(String::new());
-                            raw_draft.set(value.clone());
-                            value
-                        }),
-                        submit,
-                    )
-                    .focused(true)
-                    .error(raw_error);
-                    date_field(
-                        formatted,
-                        open,
-                        geometry,
-                        FieldGeometry::Formatted,
-                        "ui-date".into(),
-                        "ui-formatted-date".into(),
-                        "MM/DD/YYYY".into(),
-                        167.0,
-                        172.0,
-                        CallbackWith::new(move |value: String| {
+    {
+        canvas(
+            "ui-deferred-date-formatting-diagram".into(),
+            geometry,
+            RenderSlot::new(move || {
+                date_field(
+                    raw,
+                    open,
+                    geometry,
+                    FieldGeometry::Raw,
+                    "ui-date".into(),
+                    "ui-unformatted-date".into(),
+                    "MM/DD/YYYY".into(),
+                    167.0,
+                    62.0,
+                    CallbackWith::new(move |value: String| {
+                        raw_error.set(String::new());
+                        raw_draft.set(value.clone());
+                        value
+                    }),
+                    submit,
+                )
+                .focused(true)
+                .error(raw_error);
+                date_field(
+                    formatted,
+                    open,
+                    geometry,
+                    FieldGeometry::Formatted,
+                    "ui-date".into(),
+                    "ui-formatted-date".into(),
+                    "MM/DD/YYYY".into(),
+                    167.0,
+                    172.0,
+                    CallbackWith::new(move |value: String| {
+                        formatted_error.set(String::new());
+                        formatted_draft.set(value.clone());
+                        value
+                    }),
+                    Callback::new(move || {
+                        if let Some(date) = super::parse_form_date(&formatted_draft.get()) {
+                            state.with_mut(|state| state.set_selected_date(date));
                             formatted_error.set(String::new());
+                            let value = format_date(date, false);
                             formatted_draft.set(value.clone());
-                            value
-                        }),
-                        Callback::new(move || {
-                            if let Some(date) = super::parse_form_date(&formatted_draft.get()) {
-                                state.with_mut(|state| state.set_selected_date(date));
-                                formatted_error.set(String::new());
-                                let value = format_date(date, false);
-                                formatted_draft.set(value.clone());
-                                formatted.with_mut(|c| c.set_text(&value));
-                            } else {
-                                formatted_error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
-                            }
-                        }),
-                    )
-                    .error(formatted_error);
-                }),
-            );
-        }),
-    )
-    .modal_controller_optional(modal_controller);
+                            formatted.with_mut(|c| c.set_text(&value));
+                        } else {
+                            formatted_error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
+                        }
+                    }),
+                )
+                .error(formatted_error);
+                calendar_dialog(
+                    open,
+                    state,
+                    Callback::new(move || {
+                        if let Some(date) = state.with(DatePickerController::selected_date) {
+                            raw_error.set(String::new());
+                            formatted_error.set(String::new());
+                            let value = format_date(date, false);
+                            raw_draft.set(value.clone());
+                            formatted_draft.set(value.clone());
+                            raw.with_mut(|controller| controller.set_text(&value));
+                            formatted.with_mut(|controller| controller.set_text(&value));
+                        }
+                    }),
+                );
+            }),
+        );
+    }
 }
 
 #[tessera]
@@ -630,11 +608,7 @@ fn dotted_background() {
 }
 
 #[tessera]
-fn field_labels(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn field_labels() {
     let controller = remember(|| initial_controller("2023/08/17"));
     let draft = remember(|| "2023/08/17".to_owned());
     let error = remember(String::new);
@@ -648,10 +622,11 @@ fn field_labels(
     let chooser = remember(DialogController::default);
     let view = remember(|| DockedDatePickerView::Month);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    hosted_dialog(chooser).modal_controller_optional(modal_controller)
+    dialog(move || chooser.with_mut(DialogController::close))
+        .controller(chooser)
+        .padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-labeled-date-calendar-chooser"))
-        .on_close_request(move || chooser.with_mut(DialogController::close))
-        .dialog_content(move |_| {
+        .content(move || {
             docked_date_picker()
                 .controller(state)
                 .view(view)
@@ -665,114 +640,113 @@ fn field_labels(
                 })
                 .on_cancel(move || chooser.with_mut(DialogController::close))
                 .on_confirm(move || chooser.with_mut(DialogController::close));
-        })
-        .main_content(move || {
-            canvas(
-                "ui-accessible-date-label-diagram".into(),
-                geometry,
-                RenderSlot::new(move || {
-                    boxed()
-                        .modifier(
-                            Modifier::new()
-                                .offset(Dp(34.0), Dp(50.0))
-                                .size(Dp(327.0), Dp(148.0))
-                                .background_with_shape(
-                                    scheme.surface,
-                                    Shape::rounded_rectangle(Dp(10.0)),
-                                )
-                                ,
-                        )
-                        .children(move || {
-                            for (value, y, emphasized) in [
-                                ("ui-label", 23.0, false),
-                                ("ui-ui-text-event-date-yyyy-mm-dd", 45.0, true),
-                                ("ui-role", 79.0, false),
-                                ("ui-combo-box", 103.0, true),
-                            ] {
-                                let mut style = type_style(16.0, 24.0);
-                                if emphasized {
-                                    style.font_weight = 700;
-                                }
-                                text(I18N.text(value))
-                                    .style(style)
-                                    .color(if emphasized {
-                                        scheme.primary
-                                    } else {
-                                        scheme.on_surface
-                                    })
-                                    .modifier(Modifier::new().offset(Dp(22.0), Dp(y)));
+        });
+    {
+        canvas(
+            "ui-accessible-date-label-diagram".into(),
+            geometry,
+            RenderSlot::new(move || {
+                boxed()
+                    .modifier(
+                        Modifier::new()
+                            .offset(Dp(34.0), Dp(50.0))
+                            .size(Dp(327.0), Dp(148.0))
+                            .background_with_shape(
+                                scheme.surface,
+                                Shape::rounded_rectangle(Dp(10.0)),
+                            ),
+                    )
+                    .children(move || {
+                        for (value, y, emphasized) in [
+                            ("ui-label", 23.0, false),
+                            ("ui-ui-text-event-date-yyyy-mm-dd", 45.0, true),
+                            ("ui-role", 79.0, false),
+                            ("ui-combo-box", 103.0, true),
+                        ] {
+                            let mut style = type_style(16.0, 24.0);
+                            if emphasized {
+                                style.font_weight = 700;
                             }
-                        });
-                    annotation_contour(
+                            text(I18N.text(value))
+                                .style(style)
+                                .color(if emphasized {
+                                    scheme.primary
+                                } else {
+                                    scheme.on_surface
+                                })
+                                .modifier(Modifier::new().offset(Dp(22.0), Dp(y)));
+                        }
+                    });
+                annotation_contour(
                         "M44 50 H351 A10 10 0 0 1 361 60 V188 A10 10 0 0 1 351 198 H44 A10 10 0 0 1 34 188 V60 A10 10 0 0 1 44 50 Z".into(),
                     );
-                    boxed().modifier(
+                boxed().modifier(
+                    Modifier::new()
+                        .offset(Dp(361.0), Dp(98.0))
+                        .size(Dp(30.0), Dp(4.0))
+                        .background(scheme.primary),
+                );
+                boxed()
+                    .modifier(
                         Modifier::new()
-                            .offset(Dp(361.0), Dp(98.0))
-                            .size(Dp(30.0), Dp(4.0))
-                            .background(scheme.primary),
-                    );
-                    boxed()
-                        .modifier(
-                            Modifier::new()
-                                .offset(Dp(395.0), Dp(70.0))
-                                .size(Dp(342.0), Dp(56.0))
-                                .semantics(SemanticsArgs {
-                                    expanded: Some(chooser.with(DialogController::is_open)),
-                                    has_popup: Some(HasPopup::Dialog),
-                                    merge_descendants: true,
-                                    ..Default::default()
-                                })
-                                .clickable(ClickableArgs {
-                                    role: Some(Role::ComboBox),
-                                    label: Some(I18N.text("ui-event-date-yyyy-mm-dd")),
-                                    on_click: Callback::new(move || {
-                                        view.set(DockedDatePickerView::Calendar);
-                                        chooser.with_mut(DialogController::open);
-                                        focus::defer_keyboard_until_layout();
-                                    }),
-                                    ..Default::default()
+                            .offset(Dp(395.0), Dp(70.0))
+                            .size(Dp(342.0), Dp(56.0))
+                            .semantics(SemanticsArgs {
+                                expanded: Some(chooser.with(DialogController::is_open)),
+                                has_popup: Some(HasPopup::Dialog),
+                                merge_descendants: true,
+                                ..Default::default()
+                            })
+                            .clickable(ClickableArgs {
+                                role: Some(Role::ComboBox),
+                                label: Some(I18N.text("ui-event-date-yyyy-mm-dd")),
+                                on_click: Callback::new(move || {
+                                    view.set(DockedDatePickerView::Calendar);
+                                    chooser.with_mut(DialogController::open);
+                                    focus::defer_keyboard_until_layout();
                                 }),
-                        )
-                        .children(move || {
-                            date_field(
-                                controller,
-                                chooser,
-                                geometry,
-                                FieldGeometry::Field,
-                                "ui-event-date".into(),
-                                "ui-event-date-1862".into(),
-                                "YYYY/MM/DD".into(),
-                                0.0,
-                                0.0,
-                                CallbackWith::new(move |value: String| {
+                                ..Default::default()
+                            }),
+                    )
+                    .children(move || {
+                        date_field(
+                            controller,
+                            chooser,
+                            geometry,
+                            FieldGeometry::Field,
+                            "ui-event-date".into(),
+                            "ui-event-date-1862".into(),
+                            "YYYY/MM/DD".into(),
+                            0.0,
+                            0.0,
+                            CallbackWith::new(move |value: String| {
+                                error.set(String::new());
+                                draft.set(value.clone());
+                                value
+                            }),
+                            Callback::new(move || {
+                                if let Some(date) = super::parse_form_date(&draft.get()) {
+                                    state.with_mut(|state| state.set_selected_date(date));
                                     error.set(String::new());
+                                    let value = format_date(date, true);
                                     draft.set(value.clone());
-                                    value
-                                }),
-                                Callback::new(move || {
-                                    if let Some(date) = super::parse_form_date(&draft.get()) {
-                                        state.with_mut(|state| state.set_selected_date(date));
-                                        error.set(String::new());
-                                        let value = format_date(date, true);
-                                        draft.set(value.clone());
-                                        controller.with_mut(|c| c.set_text(&value));
-                                    } else {
-                                        error.set("ui-enter-a-valid-date-yyyy-mm-dd".into());
-                                    }
-                                }),
-                            )
-                            .focused(true)
-                            .show_calendar(false)
-                            .error(error);
-                        });
-                    visible_calendar_header(state, chooser, view);
-                    annotation_contour(
+                                    controller.with_mut(|c| c.set_text(&value));
+                                } else {
+                                    error.set("ui-enter-a-valid-date-yyyy-mm-dd".into());
+                                }
+                            }),
+                        )
+                        .focused(true)
+                        .show_calendar(false)
+                        .error(error);
+                    });
+                visible_calendar_header(state, chooser, view);
+                annotation_contour(
                         "M475 65 H735 A6 6 0 0 1 741 71 V122 A6 6 0 0 1 735 128 H397 A6 6 0 0 1 391 122 V71 A6 6 0 0 1 397 65 H407".into(),
                     );
-                }),
-            );
-        });
+            }),
+        );
+    }
 }
 
 #[tessera]

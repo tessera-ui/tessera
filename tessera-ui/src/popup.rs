@@ -5,8 +5,8 @@
 //! Show menus, tooltips, dialogs, and sheets above main content and earlier popups.
 
 use crate::{
-    Callback, FloatRect, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot,
-    component_tree::NodeRole, layout::Stack, runtime::TesseraRuntime,
+    Callback, CallbackWith, FloatRect, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot,
+    component_tree::NodeRole, layout::Stack, runtime::TesseraRuntime, system_back::SystemBackEvent,
 };
 
 /// Geometry available to a [`PopupPositionPolicy`], in window coordinates.
@@ -62,6 +62,7 @@ pub(crate) struct PopupConfig {
     pub(crate) dismiss_on_escape: bool,
     pub(crate) dismiss_on_back: bool,
     pub(crate) on_dismiss_request: Option<Callback>,
+    pub(crate) on_back_preview: Option<CallbackWith<SystemBackEvent>>,
     /// Opening order among popups; later popups stack above earlier siblings.
     pub(crate) sequence: u64,
 }
@@ -161,8 +162,22 @@ impl PopupNode {
     }
 
     /// Requests dismissal on system back. Defaults to `true`.
+    ///
+    /// The topmost dismissible popup receives system back. A predictive
+    /// gesture stays with the popup where it started.
     pub fn dismiss_on_back(self, dismiss: bool) -> Self {
         self.configure(|config| config.dismiss_on_back = dismiss)
+    }
+
+    /// Follows each phase of a predictive back gesture that may dismiss the
+    /// popup, so its content can preview the dismissal. The committed phase
+    /// arrives just before [`PopupNode::on_dismiss_request`].
+    pub fn on_back_preview(
+        self,
+        on_back_preview: impl Into<CallbackWith<SystemBackEvent>>,
+    ) -> Self {
+        let callback = on_back_preview.into();
+        self.configure(|config| config.on_back_preview = Some(callback))
     }
 
     /// Sets the action that dismisses the popup. Without it the popup

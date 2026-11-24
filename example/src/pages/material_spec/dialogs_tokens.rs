@@ -6,7 +6,7 @@ use tessera_components::{
         button::button,
         icon::icon,
         material_icons::filled,
-        menus::{MenuController, MenuItemSelectionMode, menu_item, menu_provider},
+        menus::{MenuController, MenuItemSelectionMode, menu_anchor, menu_item},
         text::text,
     },
     row::row,
@@ -87,11 +87,11 @@ fn token_menu(
     controller: State<MenuController>,
     anchor: State<LayoutCoordinates>,
 ) {
-    menu_provider()
+    menu_anchor()
         .controller(controller)
         .window_anchor(anchor)
         .modifier(Modifier::new().fill_max_width())
-        .main_content(move || {
+        .anchor_content(move || {
             column()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {

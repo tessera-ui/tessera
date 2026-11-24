@@ -13,7 +13,7 @@ use tessera_components::{
         text::text,
         theme::{MaterialTheme, TextStyle, material_theme},
         tooltip::{
-            TooltipController, TooltipPlacement, TooltipVariant, tooltip_anchor, tooltip_provider,
+            TooltipController, TooltipPlacement, TooltipVariant, tooltip_box, tooltip_panel,
         },
     },
     modifier::ModifierExt as _,
@@ -1113,23 +1113,19 @@ fn tooltip_plain_placement() {
                             Shape::rounded_rectangle(Dp(24.0)),
                         ),
                 );
-                tooltip_provider(I18N.text("ui-add-to-list"))
-                    .controller(controller)
-                    .placement(TooltipPlacement::Above)
-                    .popup_modifier(watch_in_space(geometry, "placement_popup"))
-                    .child(move |_| {
-                        boxed()
-                            .modifier(Modifier::new().required_size(Dp(1024.0), Dp(300.0)))
-                            .children(move || {
-                                tooltip_anchor(controller)
-                                    .modifier(Modifier::new().offset(Dp(488.0), Dp(150.0)))
-                                    .child(move || {
-                                        icon_button()
-                                            .standard()
-                                            .icon(filled::PLAYLIST_ADD_SVG)
-                                            .accessibility_label(I18N.text("ui-add-to-list"))
-                                            .modifier(watch_in_space(geometry, "placement_target"));
-                                    });
+                boxed()
+                    .modifier(Modifier::new().required_size(Dp(1024.0), Dp(300.0)))
+                    .children(move || {
+                        tooltip_box(I18N.text("ui-add-to-list"))
+                            .controller(controller)
+                            .popup_modifier(watch_in_space(geometry, "placement_popup"))
+                            .modifier(Modifier::new().offset(Dp(488.0), Dp(150.0)))
+                            .child(move || {
+                                icon_button()
+                                    .standard()
+                                    .icon(filled::PLAYLIST_ADD_SVG)
+                                    .accessibility_label(I18N.text("ui-add-to-list"))
+                                    .modifier(watch_in_space(geometry, "placement_target"));
                             });
                     });
                 tooltip_plain_placement_annotations(geometry);
@@ -2015,38 +2011,22 @@ fn tooltip_configuration_canvas() {
 
 #[tessera]
 fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y: Dp) {
-    let controller = remember(|| {
-        let mut controller = TooltipController::new();
-        controller.show();
-        controller
-    });
-    let geometry = remember(SpaceGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let popup_height = geometry
-        .with(|values| {
-            values
-                .get("popup")
-                .map(|rect| Dp::from_pixels_f32(rect.height).0)
-        })
-        .unwrap_or(if actions == 0 {
-            112.0
-        } else if headline {
-            156.0
-        } else {
-            132.0
-        });
-    boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
-        role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),merge_descendants:true,..Default::default()
+    column().modifier(Modifier::new().offset(x,Dp(y.0-48.0)).semantics(SemanticsArgs {
+        role: Some(Role::Group),label: Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", number.into())])),merge_descendants:true,..Default::default()
     })).children(move || {
-        let content = RenderSlot::new(move || {
-            let provider = tooltip_provider(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
-                .controller(controller)
+            boxed().alignment(Alignment::Center)
+                .modifier(Modifier::new().size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
+                .children(move || {text(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface);});
+            gap(Dp(24.0));
+            let tooltip = tooltip_panel(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
+                .modifier(Modifier::new().width(Dp(312.0)))
                 .variant(TooltipVariant::Rich);
             if headline {
-                provider.headline(I18N.text("ui-rich-tooltip"));
+                tooltip.headline(I18N.text("ui-rich-tooltip"));
             }
             if actions > 0 {
-                provider.actions(move || {
+                tooltip.actions(move || {
                     row().children(move || {
                         for action in 1..=actions {
                             button().text()
@@ -2056,34 +2036,6 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                     });
                 });
             }
-            provider
-                .placement(TooltipPlacement::Below)
-                .persistent(actions > 0)
-                .popup_modifier(watch_in_space(geometry, "popup").width(Dp(312.0)))
-                .child(move |_| {
-                    boxed()
-                        .modifier(Modifier::new().required_size(Dp(328.0), Dp(popup_height + 56.0)))
-                        .children(move || {
-                            tooltip_anchor(controller)
-                                .modifier(Modifier::new().offset(Dp(8.0), Dp(8.0)).size(Dp(312.0), Dp(36.0)))
-                                .child(move || {
-                                    boxed()
-                                        .modifier(Modifier::new().size(Dp(312.0), Dp(36.0)))
-                                        .children(move || {
-                                            boxed().alignment(Alignment::Center)
-                                                .modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0))
-                                                    .border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
-                                                .children(move || {
-                                                    text((number).to_string())
-                                                        .style(type_style(14.0, 20.0))
-                                                        .color(scheme.on_surface);
-                                                });
-                                        });
-                                });
-                        });
-                });
-        });
-        content.render();
     });
 }
 
@@ -2227,85 +2179,50 @@ fn tooltip_reference_popup(
     } else {
         "popup"
     };
-    let controller = remember(|| {
-        let mut controller = TooltipController::new();
-        controller.show();
-        controller
-    });
-    let popup_height = geometry
-        .with(|values| {
-            values
-                .get(name)
-                .map(|rect| Dp::from_pixels_f32(rect.height).0)
-        })
-        .unwrap_or(if rich { 156.0 } else { 24.0 });
     let modifier = watch_in_space(geometry, name);
     let modifier = if rich {
         modifier.width(Dp(312.0))
     } else {
         modifier
     };
-    let content = RenderSlot::new(move || {
-        let anchor =
-            RenderSlot::new(move || {
-                boxed()
-                    .modifier(Modifier::new().required_size(Dp(width), Dp(height)))
-                    .children(move || {
-                        tooltip_anchor(controller)
-                            .modifier(Modifier::new().offset(
-                                Dp(center_x - 0.5),
-                                Dp(center_y + popup_height * 0.5 + 4.0),
-                            ))
-                            .child(|| {
-                                spacer().modifier(Modifier::new().size(Dp(1.0), Dp(1.0)));
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(Dp(center_x - width * 0.5), Dp(center_y - height * 0.5))
+                .required_size(Dp(width), Dp(height)),
+        )
+        .children(move || {
+            let tooltip = tooltip_panel(I18N.text(message.clone())).modifier(modifier.clone());
+            if rich {
+                tooltip
+                    .variant(TooltipVariant::Rich)
+                    .headline(I18N.text(headline))
+                    .actions(move || {
+                        button()
+                            .text()
+                            .modifier(watch_in_space(geometry, "action"))
+                            .accessibility_label(I18N.text(action_text))
+                            .child(move || {
+                                let style = use_context::<MaterialTheme>()
+                                    .unwrap()
+                                    .get()
+                                    .typography
+                                    .label_large;
+                                text(I18N.text(action_text))
+                                    .style(style)
+                                    .modifier(watch_in_space(geometry, "action_label"));
                             });
                     });
-            });
-        if rich {
-            tooltip_provider(I18N.text(message.clone()))
-                .controller(controller)
-                .variant(TooltipVariant::Rich)
-                .headline(I18N.text(headline))
-                .popup_modifier(modifier.clone())
-                .actions(move || {
-                    button()
-                        .text()
-                        .modifier(watch_in_space(geometry, "action"))
-                        .accessibility_label(I18N.text(action_text))
-                        .child(move || {
-                            let style = use_context::<MaterialTheme>()
-                                .unwrap()
-                                .get()
-                                .typography
-                                .label_large;
-                            text(I18N.text(action_text))
-                                .style(style)
-                                .modifier(watch_in_space(geometry, "action_label"));
-                        });
-                })
-                .placement(TooltipPlacement::Above)
-                .child(move |_| {
-                    (anchor).render();
-                });
-        } else {
-            tooltip_provider(I18N.text(message.clone()))
-                .controller(controller)
-                .variant(TooltipVariant::Plain)
-                .popup_modifier(modifier.clone())
-                .placement(TooltipPlacement::Above)
-                .child(move |_| {
-                    (anchor).render();
-                });
-        }
-    });
-    content.render();
+            }
+        });
     if rich {
         let style = use_context::<MaterialTheme>()
             .unwrap()
             .get()
             .typography
             .title_small;
-        // The provider exposes a title string, so annotations measure an
+        // The tooltip exposes a title string, so annotations measure an
         // equivalent hidden label.
         text(I18N.text(headline)).style(style).modifier(
             watch_in_space(geometry, "headline_label")
@@ -2774,78 +2691,72 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
     let favorite = remember(|| false);
     let acknowledged = remember(|| false);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    tooltip_provider(I18N.text(if favorite.get() {
-        "ui-remove-from-favorites"
-    } else {
-        "ui-add-to-favorites"
-    }))
-    .controller(plain)
-    .group(group)
-    .persistent(false)
-    .child(move |_| {
-        tooltip_provider(I18N.text("ui-keep-related-items-together-so-you-can-find-them-again"))
-            .controller(rich)
-            .group(group)
-            .variant(TooltipVariant::Rich)
-            .headline(I18N.text("ui-collections"))
-            .placement(TooltipPlacement::Below)
-            .persistent(true)
-            .action_label(I18N.text("ui-got-it"))
-            .on_action(move || {
-                acknowledged.set(true);
-                if let Some(callback) = on_acknowledge {
-                    callback.call();
-                }
-            })
-            .child(move |_| {
-                column()
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_width()
-                            .background_with_shape(
-                                scheme.surface_container_low,
-                                Shape::rounded_rectangle(Dp(24.0)),
-                            )
-                            .padding_all(Dp(24.0)),
-                    )
-                    .children(move || {
-                        flow_row()
-                            .main_axis_alignment(
-                                tessera_components::alignment::MainAxisAlignment::Center,
-                            )
-                            .item_spacing(Dp(24.0))
-                            .line_spacing(Dp(16.0))
-                            .children(move || {
-                                tooltip_anchor(plain).child(move || {
-                                    icon_button()
-                                        .standard()
-                                        .selected(favorite.get())
-                                        .icon(if favorite.get() {
-                                            filled::FAVORITE_SVG
-                                        } else {
-                                            filled::FAVORITE_BORDER_SVG
-                                        })
-                                        .accessibility_label(I18N.text(if favorite.get() {
-                                            "ui-remove-from-favorites"
-                                        } else {
-                                            "ui-add-to-favorites"
-                                        }))
-                                        .on_click(move || favorite.set(!favorite.get()));
-                                });
-                                tooltip_anchor(rich).child(move || {
-                                    button()
-                                        .text()
-                                        .accessibility_label(I18N.text("ui-about-collections"))
-                                        .on_click(move || rich.with_mut(TooltipController::show))
-                                        .child(move || {
-                                            text(I18N.text("ui-about-collections"));
-                                        });
-                                });
-                            });
-                        spacer().modifier(Modifier::new().height(Dp(192.0)));
+    column()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .padding_all(Dp(24.0)),
+        )
+        .children(move || {
+            flow_row()
+                .main_axis_alignment(tessera_components::alignment::MainAxisAlignment::Center)
+                .item_spacing(Dp(24.0))
+                .line_spacing(Dp(16.0))
+                .children(move || {
+                    tooltip_box(I18N.text(if favorite.get() {
+                        "ui-remove-from-favorites"
+                    } else {
+                        "ui-add-to-favorites"
+                    }))
+                    .controller(plain)
+                    .group(group)
+                    .child(move || {
+                        icon_button()
+                            .standard()
+                            .selected(favorite.get())
+                            .icon(if favorite.get() {
+                                filled::FAVORITE_SVG
+                            } else {
+                                filled::FAVORITE_BORDER_SVG
+                            })
+                            .accessibility_label(I18N.text(if favorite.get() {
+                                "ui-remove-from-favorites"
+                            } else {
+                                "ui-add-to-favorites"
+                            }))
+                            .on_click(move || favorite.set(!favorite.get()));
                     });
-            });
-    });
+                    tooltip_box(
+                        I18N.text("ui-keep-related-items-together-so-you-can-find-them-again"),
+                    )
+                    .controller(rich)
+                    .group(group)
+                    .variant(TooltipVariant::Rich)
+                    .headline(I18N.text("ui-collections"))
+                    .placement(TooltipPlacement::Below)
+                    .action_label(I18N.text("ui-got-it"))
+                    .on_action(move || {
+                        acknowledged.set(true);
+                        if let Some(callback) = on_acknowledge {
+                            callback.call();
+                        }
+                    })
+                    .child(move || {
+                        button()
+                            .text()
+                            .accessibility_label(I18N.text("ui-about-collections"))
+                            .on_click(move || rich.with_mut(TooltipController::show))
+                            .child(move || {
+                                text(I18N.text("ui-about-collections"));
+                            });
+                    });
+                });
+            spacer().modifier(Modifier::new().height(Dp(192.0)));
+        });
     if acknowledged.get() {
         gap(Dp(16.0));
         prose("ui-collection-guidance-acknowledged".into());
@@ -2914,43 +2825,41 @@ fn placement_examples() {
                                     ),
                                 );
                             });
-                        tooltip_provider(
-                            I18N.text("ui-add-annotations-and-highlights-with-the-paint-tool"),
-                        )
-                        .controller(controller)
-                        .variant(TooltipVariant::Rich)
-                        .headline(I18N.text("ui-paint-tool"))
-                        .placement(placement)
-                        .persistent(false)
-                        .modifier(Modifier::new().fill_max_size())
-                        .actions(move || {
-                            button()
-                                .text()
-                                .accessibility_label(I18N.text("ui-learn-more"))
-                                .child(move || {
-                                    text(I18N.text("ui-learn-more"));
-                                });
-                        })
-                        .child(move |_| {
-                            boxed()
-                                .modifier(Modifier::new().fill_max_size().padding_all(Dp(36.0)))
-                                .children(move || {
-                                    tooltip_anchor(controller)
-                                        .modifier(Modifier::new().align(alignment))
+                        boxed()
+                            .modifier(Modifier::new().fill_max_size().padding_all(Dp(36.0)))
+                            .children(move || {
+                                tooltip_box(
+                                    I18N.text(
+                                        "ui-add-annotations-and-highlights-with-the-paint-tool",
+                                    ),
+                                )
+                                .controller(controller)
+                                .variant(TooltipVariant::Rich)
+                                .headline(I18N.text("ui-paint-tool"))
+                                .placement(placement)
+                                .persistent(false)
+                                .modifier(Modifier::new().align(alignment))
+                                .actions(move || {
+                                    button()
+                                        .text()
+                                        .accessibility_label(I18N.text("ui-learn-more"))
                                         .child(move || {
-                                            icon_button()
-                                                .standard()
-                                                .icon(filled::BRUSH_SVG)
-                                                .accessibility_label(I18N.format(
-                                                    "ui-corner-tooltip-value",
-                                                    [("v0", format!("{:?}", alignment).into())],
-                                                ))
-                                                .on_click(move || {
-                                                    controller.with_mut(TooltipController::show)
-                                                });
+                                            text(I18N.text("ui-learn-more"));
+                                        });
+                                })
+                                .child(move || {
+                                    icon_button()
+                                        .standard()
+                                        .icon(filled::BRUSH_SVG)
+                                        .accessibility_label(I18N.format(
+                                            "ui-corner-tooltip-value",
+                                            [("v0", format!("{:?}", alignment).into())],
+                                        ))
+                                        .on_click(move || {
+                                            controller.with_mut(TooltipController::show)
                                         });
                                 });
-                        });
+                            });
                     });
             }
         });

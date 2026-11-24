@@ -16,7 +16,7 @@ use tessera_components::{
         material_icons::{filled, outlined},
         navigation_bar::{NavigationBarIconPosition, navigation_bar, navigation_bar_item},
         navigation_rail::{navigation_rail, navigation_rail_item},
-        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
+        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet},
         text::text,
         theme::{MaterialTheme, material_theme},
     },
@@ -1693,32 +1693,28 @@ fn modal_rail() {
     let open = remember(|| SideSheetController::new(false));
     let selected = remember(|| 0usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    modal_side_sheet_provider()
+    column()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(480.0))
+                .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
+                .padding_all(Dp(24.0)),
+        )
+        .children(move || {
+            icon_button()
+                .standard()
+                .icon(filled::MENU_SVG)
+                .accessibility_label(I18N.text("ui-open-modal-expanded-rail"))
+                .on_click(move || open.with_mut(SideSheetController::open));
+            gap(Dp(24.0));
+            text(I18N.text(NAMES[selected.get()])).style(type_style(24.0, 32.0));
+            text(I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"))
+                .style(type_style(16.0, 24.0));
+        });
+    modal_side_sheet(open)
         .position(SideSheetPosition::Start)
-        .controller(open)
         .accessibility_label(I18N.text("ui-expanded-navigation-rail"))
-        .on_close_request(move || open.with_mut(SideSheetController::close))
-        .main_content(move || {
-            column()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .height(Dp(480.0))
-                        .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
-                        .padding_all(Dp(24.0)),
-                )
-                .children(move || {
-                    icon_button()
-                        .standard()
-                        .icon(filled::MENU_SVG)
-                        .accessibility_label(I18N.text("ui-open-modal-expanded-rail"))
-                        .on_click(move || open.with_mut(SideSheetController::open));
-                    gap(Dp(24.0));
-                    text(I18N.text(NAMES[selected.get()])).style(type_style(24.0, 32.0));
-                    text(I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"))
-                        .style(type_style(16.0, 24.0));
-                });
-        })
         .side_sheet_content(move || {
             navigation_rail()
                 .expanded(true)

@@ -18,7 +18,7 @@ use tessera_components::{
             DateRangePickerController, DockedDatePickerView, Weekday, YearMonth,
             date_picker_dialog, date_range_picker, docked_date_picker,
         },
-        dialog::{DialogController, dialog_provider},
+        dialog::{DialogController, dialog},
         icon_button::icon_button,
         material_icons::filled,
         surface::surface,
@@ -90,9 +90,6 @@ fn formatted(value: Option<CalendarDate>) -> String {
 
 #[tessera]
 pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
-    let modal_controller = Some(remember(
-        crate::pages::material_spec::article::modal_host::ArticleModalState::default,
-    ));
     let calendar = Sample {
         single: remember(|| single(DatePickerDisplayMode::Picker)),
         range: remember(|| range(DatePickerDisplayMode::Picker)),
@@ -123,7 +120,7 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
             sections.push(SpecSection {
                 title: chapter.title,
                 content: RenderSlot::new(move || {
-                    date_chapter(chapter.clone()).modal_controller_optional(modal_controller);
+                    date_chapter(chapter.clone());
                 }),
             });
         }
@@ -137,88 +134,85 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
             sections,
         });
     }
-    dialog_provider()
+    {
+        article(
+            "ui-date-pickers",
+            "ui-date-pickers-let-people-select-a-date-or-a-range-of-dates",
+            vec![
+                SpecSection {
+                    title: "ui-tokens-specs",
+                    content: RenderSlot::new(tokens),
+                },
+                SpecSection {
+                    title: "ui-docked-date-picker",
+                    content: RenderSlot::new(docked_section),
+                },
+                SpecSection {
+                    title: "ui-modal-date-picker",
+                    content: RenderSlot::new(move || {
+                        date_figure(Figure::Day, true, false);
+                        gap(Dp(32.0));
+                        example(calendar, "ui-calendar", modal, modal_input, false, draft);
+                        gap(Dp(24.0));
+                        anatomy_legend(Figure::Day, DockedDatePickerView::Calendar);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-picker-color".into());
+                        gap(Dp(24.0));
+                        date_colors(Figure::Day);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-picker-measurements".into());
+                        gap(Dp(24.0));
+                        date_figure(Figure::Day, false, true);
+                        gap(Dp(24.0));
+                        measurements(false);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-picker-configurations".into());
+                        gap(Dp(24.0));
+                        modal_configurations();
+                    }),
+                },
+                SpecSection {
+                    title: "ui-modal-date-input",
+                    content: RenderSlot::new(move || {
+                        date_figure(Figure::Input, true, false);
+                        gap(Dp(32.0));
+                        example(input, "ui-input", modal, modal_input, true, draft);
+                        gap(Dp(24.0));
+                        anatomy_legend(Figure::Input, DockedDatePickerView::Calendar);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-input-color".into());
+                        gap(Dp(24.0));
+                        date_colors(Figure::Input);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-input-measurements".into());
+                        gap(Dp(24.0));
+                        date_figure(Figure::Input, false, true);
+                        gap(Dp(24.0));
+                        measurements(true);
+                        gap(Dp(32.0));
+                        subheading("ui-modal-date-input-configurations".into());
+                        gap(Dp(24.0));
+                        input_configurations();
+                    }),
+                },
+                SpecSection {
+                    title: "ui-element-states",
+                    content: RenderSlot::new(move || {
+                        states();
+                    }),
+                },
+            ],
+        )
+        .route_optional(route)
+        .compact_content_inset(Dp(8.0))
+        .pages(pages);
+    }
+    dialog(move || modal.with_mut(DialogController::close))
         .controller(modal)
         .padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-date-picker-dialog"))
-        .on_close_request(move || modal.with_mut(DialogController::close))
-        .main_content(move || {
-            article(
-                "ui-date-pickers",
-                "ui-date-pickers-let-people-select-a-date-or-a-range-of-dates",
-                vec![
-                    SpecSection {
-                        title: "ui-tokens-specs",
-                        content: RenderSlot::new(tokens),
-                    },
-                    SpecSection {
-                        title: "ui-docked-date-picker",
-                        content: RenderSlot::new(docked_section),
-                    },
-                    SpecSection {
-                        title: "ui-modal-date-picker",
-                        content: RenderSlot::new(move || {
-                            date_figure(Figure::Day, true, false);
-                            gap(Dp(32.0));
-                            example(calendar, "ui-calendar", modal, modal_input, false, draft);
-                            gap(Dp(24.0));
-                            anatomy_legend(Figure::Day, DockedDatePickerView::Calendar);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-picker-color".into());
-                            gap(Dp(24.0));
-                            date_colors(Figure::Day);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-picker-measurements".into());
-                            gap(Dp(24.0));
-                            date_figure(Figure::Day, false, true);
-                            gap(Dp(24.0));
-                            measurements(false);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-picker-configurations".into());
-                            gap(Dp(24.0));
-                            modal_configurations();
-                        }),
-                    },
-                    SpecSection {
-                        title: "ui-modal-date-input",
-                        content: RenderSlot::new(move || {
-                            date_figure(Figure::Input, true, false);
-                            gap(Dp(32.0));
-                            example(input, "ui-input", modal, modal_input, true, draft);
-                            gap(Dp(24.0));
-                            anatomy_legend(Figure::Input, DockedDatePickerView::Calendar);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-input-color".into());
-                            gap(Dp(24.0));
-                            date_colors(Figure::Input);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-input-measurements".into());
-                            gap(Dp(24.0));
-                            date_figure(Figure::Input, false, true);
-                            gap(Dp(24.0));
-                            measurements(true);
-                            gap(Dp(32.0));
-                            subheading("ui-modal-date-input-configurations".into());
-                            gap(Dp(24.0));
-                            input_configurations();
-                        }),
-                    },
-                    SpecSection {
-                        title: "ui-element-states",
-                        content: RenderSlot::new(move || {
-                            states();
-                        }),
-                    },
-                ],
-            )
-            .modal_controller_optional(modal_controller)
-            .route_optional(route.clone())
-            .compact_content_inset(Dp(8.0))
-            .pages(pages.clone());
-        })
-        .dialog_content(move |dialog_scope| {
+        .content(move || {
             themed_picker(draft, "ui-modal")
-                .dialog(dialog_scope)
                 .modal(modal)
                 .commit_target(if modal_input.get() { input } else { calendar });
         });
@@ -381,14 +375,11 @@ fn themed_picker(
     #[prop(into)] label: String,
     modal: Option<State<DialogController>>,
     commit_target: Option<Sample>,
-
-    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, sample.dark.get()))
         .child(move || {
             picker_surface(sample, label.clone())
-                .dialog_optional(dialog)
                 .modal_optional(modal)
                 .commit_target_optional(commit_target);
         });
@@ -400,8 +391,6 @@ fn picker_surface(
     #[prop(into)] label: String,
     modal: Option<State<DialogController>>,
     commit_target: Option<Sample>,
-
-    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -445,7 +434,6 @@ fn picker_surface(
                 let confirm_label = confirm_label.clone();
                 let cancel_label = cancel_label.clone();
                 date_picker_dialog()
-                    .dialog_optional(dialog)
                     .picker_today(illustration_today())
                     .controller(sample.single)
                     .picker_first_day_of_week(Weekday::Sunday)
@@ -811,12 +799,7 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
 }
 
 #[tessera]
-fn date_chapter(
-    chapter: DateChapter,
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn date_chapter(chapter: DateChapter) {
     text(I18N.text(chapter.text)).style(type_style(16.0, 24.0));
     if chapter.figure != Figure::None {
         gap(Dp(24.0));
@@ -824,8 +807,7 @@ fn date_chapter(
             chapter.figure,
             chapter.title.to_owned(),
             chapter.title == "ui-anatomy",
-        )
-        .modal_controller_optional(modal_controller);
+        );
     }
     if chapter.title == "ui-keyboard-navigation" {
         gap(Dp(24.0));
@@ -872,21 +854,13 @@ fn date_chapter(
                 child.figure,
                 child.title.to_owned(),
                 chapter.title == "ui-anatomy",
-            )
-            .modal_controller_optional(modal_controller);
+            );
         }
     }
 }
 
 #[tessera]
-fn chapter_figure(
-    figure: Figure,
-    title: String,
-    anatomy: bool,
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn chapter_figure(figure: Figure, title: String, anatomy: bool) {
     let instructional = match title.as_str() {
         "ui-date-entry-methods" => Some(instructional_figures::Illustration::EntryMethods),
         "ui-accessible-date-input" => Some(instructional_figures::Illustration::Formatting),
@@ -895,7 +869,7 @@ fn chapter_figure(
         _ => None,
     };
     if let Some(kind) = instructional {
-        instructional_figures::illustration(kind).modal_controller_optional(modal_controller);
+        instructional_figures::illustration(kind);
     } else {
         let view = remember(|| match title.as_str() {
             "ui-month-selection" => DockedDatePickerView::Month,

@@ -4,7 +4,7 @@ use tessera_components::{
     boxed::boxed,
     md3::{
         navigation_rail::{navigation_rail, navigation_rail_item},
-        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
+        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet},
         surface::surface,
         theme::{MaterialTheme, material_theme},
     },
@@ -104,17 +104,14 @@ fn dark_surface_fixture() {
 #[tessera]
 fn white_scrim_fixture() {
     material_theme().child(|| {
-        modal_side_sheet_provider()
+        boxed()
+            .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
+            .children(|| {});
+        modal_side_sheet(remember(|| SideSheetController::new(true)))
             .accessibility_label("Precision scrim sheet")
             .position(SideSheetPosition::Start)
             .max_width(Dp(240.0))
             .content_padding(Dp::ZERO)
-            .controller(remember(|| SideSheetController::new(true)))
-            .main_content(|| {
-                boxed()
-                    .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
-                    .children(|| {});
-            })
             .side_sheet_content(|| {
                 boxed()
                     .modifier(Modifier::new().fill_max_size())
@@ -350,6 +347,14 @@ fn app_paints_safe_areas_and_applies_live_insets_once() {
     let mut renderer = crate::run()
         .into_headless(HeadlessConfig::default())
         .expect("example GPU session");
+    // The directory starts open, and its modal sheet covers the app bar.
+    renderer.render_frames(1);
+    let scrim = tessera_ui::PxPosition::new(tessera_ui::Px(790), tessera_ui::Px(300));
+    let button = tessera_ui::PressKeyEventType::Left;
+    renderer.pointer_press(tessera_ui::MOUSE_POINTER_ID, scrim, button);
+    renderer.render_frames(1);
+    renderer.pointer_release(tessera_ui::MOUSE_POINTER_ID, scrim, button);
+    renderer.render_frames(1);
     for (width, height, insets) in [
         (800, 600, Insets::top(Dp(28.0))),
         (400, 800, Insets::vertical(Dp(24.0))),

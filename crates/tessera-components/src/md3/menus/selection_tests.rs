@@ -8,7 +8,7 @@ use tessera_ui::{
 
 use crate::md3::{surface::surface, theme::material_theme};
 
-use super::{MenuController, MenuItemSelectionMode, menu_group, menu_item, menu_provider};
+use super::{MenuController, MenuItemSelectionMode, menu_anchor, menu_group, menu_item};
 
 #[tessera]
 fn fixture() {
@@ -20,9 +20,9 @@ fn fixture() {
     let choices = remember(|| [true, false]);
     let radio = remember(|| 0_usize);
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .controller(controller)
-            .main_content(|| {
+            .anchor_content(|| {
                 surface()
                     .modifier(Modifier::new().fill_max_size())
                     .child(|| {});

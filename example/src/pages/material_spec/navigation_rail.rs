@@ -75,29 +75,15 @@ pub(crate) fn live_rail_host(
     if !session.route_active() && open.get() {
         open.set(false);
     }
-    let modal = RenderSlot::new(move || {
-        live_rail_modal(
-            open,
-            selected,
-            RenderSlot::new(move || {
-                main_content.render(session);
-            }),
-        );
-    });
-    modal.render();
+    main_content.render(session);
+    live_rail_modal(open, selected);
 }
 
 #[tessera]
-fn live_rail_modal(
-    modal_open: State<bool>,
-    modal_selected: State<usize>,
-    main_content: RenderSlot,
-) {
-    modal_navigation_rail()
-        .is_open(modal_open.get())
+fn live_rail_modal(modal_open: State<bool>, modal_selected: State<usize>) {
+    modal_navigation_rail(modal_open.get())
         .accessibility_label(I18N.text("ui-mail-rail-navigation"))
         .on_close_request(move || modal_open.set(false))
-        .main_content_shared(main_content)
         .header(move || {
             icon_button()
                 .standard()
@@ -249,10 +235,9 @@ pub(super) fn navigation_rail_spec(
             },
         ]);
     });
-    if root.is_some() {
-        content.render();
-    } else {
-        live_rail_modal(modal_open, modal_selected, content);
+    content.render();
+    if root.is_none() {
+        live_rail_modal(modal_open, modal_selected);
     }
 }
 

@@ -12,7 +12,7 @@ use tessera_components::{
         button::button,
         icon::icon,
         material_icons::filled,
-        menus::{MenuController, menu_item, menu_provider},
+        menus::{MenuController, menu_anchor, menu_item},
         split_buttons::{
             SplitButtonDefaults, SplitButtonSize, SplitButtonVariant, split_button_layout,
             split_leading_button, split_trailing_button,
@@ -95,11 +95,11 @@ pub(super) fn split_buttons_spec(
         .modifier(Modifier::new().fill_max_size())
         .children(move || {
             let route = route.clone();
-            menu_provider()
+            menu_anchor()
                 .controller(menu.controller)
                 .container_color(menu.theme.get().color_scheme.surface_container_low)
                 .window_anchor(menu.anchor)
-                .main_content(move || {
+                .anchor_content(move || {
                     article(
                         "ui-split-button",
                         "ui-split-buttons-pair-a-main-action-with-a-menu-of-related-actions",

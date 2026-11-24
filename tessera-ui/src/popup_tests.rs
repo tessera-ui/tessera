@@ -7,7 +7,9 @@ use crate::{
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     popup::{PopupPositionInput, PopupPositionPolicy, WindowOrigin, popup},
-    remember, tessera,
+    remember,
+    system_back::{BackSwipeEdge, SystemBackEvent},
+    tessera,
     testing::{TestProbe, UiTest},
 };
 
@@ -320,6 +322,139 @@ fn escape_and_system_back_request_dismissal() {
     ui.dispatch_system_back(crate::system_back::SystemBackEvent::Committed);
     ui.frame();
     assert_eq!(probe.log.take(), vec!["dismiss"]);
+}
+
+#[tessera]
+fn spaced_popup(rects: TestProbe<Vec<FloatRect>>) {
+    layout(Column(true)).child(move || {
+        back_leaf();
+        let rects = rects.clone();
+        layout(Fixed(100, 20))
+            .modifier(Modifier::new().layout_coordinate_space())
+            .child(move || {
+                let rects = rects.clone();
+                popup(Below).child(move || {
+                    let rects = rects.clone();
+                    layout(Fixed(100, 50)).modifier(
+                        Modifier::new()
+                            .on_layout_rect_in_space(move |rect| rects.with_mut(|r| r.push(rect))),
+                    );
+                });
+            });
+    });
+}
+
+#[test]
+fn popup_content_reports_its_rect_in_the_anchor_coordinate_space() {
+    let rects = TestProbe::default();
+    let content = rects.clone();
+    let mut ui = UiTest::new()
+        .viewport(300, 200)
+        .content(move || spaced_popup(content.clone()));
+    ui.frame();
+    assert_eq!(
+        rects.take(),
+        vec![FloatRect::from_position_size(
+            PxPosition::new(Px(0), Px(20)),
+            crate::PxSize::new(Px(100), Px(50)),
+        )]
+    );
+}
+
+type BackLog = TestProbe<Vec<(String, Option<SystemBackEvent>)>>;
+
+#[tessera]
+fn back_leaf() {
+    layout(Fixed(20, 20)).modifier(Modifier::new());
+}
+
+#[tessera]
+fn back_popup(name: String, log: BackLog, open: State<bool>, inner: Option<State<bool>>) {
+    let preview = (name.clone(), log.clone());
+    let dismissed = (name, log.clone());
+    popup(WindowOrigin)
+        .on_back_preview(move |event| {
+            preview
+                .1
+                .with_mut(|log| log.push((preview.0.clone(), Some(event))));
+        })
+        .on_dismiss_request(move || {
+            dismissed
+                .1
+                .with_mut(|log| log.push((dismissed.0.clone(), None)));
+            open.set(false);
+        })
+        .child(move || {
+            back_leaf();
+            if let Some(inner) = inner
+                && inner.get()
+            {
+                back_popup("inner".to_owned(), log.clone(), inner);
+            }
+        });
+}
+
+#[tessera]
+fn back_layers(log: BackLog, inner_open: TestProbe<Option<State<bool>>>) {
+    let outer = remember(|| true);
+    let inner = remember(|| false);
+    inner_open.set(Some(inner));
+    layout(Fixed(10, 10)).child(move || {
+        if outer.get() {
+            back_popup("outer".to_owned(), log.clone(), outer).inner(inner);
+        }
+    });
+}
+
+#[test]
+fn predictive_back_stays_with_its_starting_popup_and_commits_through_the_preview() {
+    let log = BackLog::default();
+    let inner_open = TestProbe::default();
+    let content = (log.clone(), inner_open.clone());
+    let mut ui = UiTest::new()
+        .viewport(100, 100)
+        .content(move || back_layers(content.0.clone(), content.1.clone()));
+    ui.frame();
+
+    let started = SystemBackEvent::Started(BackSwipeEdge::Left);
+    let progress = SystemBackEvent::Progress {
+        progress: 0.5,
+        edge: BackSwipeEdge::Left,
+    };
+    ui.dispatch_system_back(started);
+    let inner = inner_open.get().expect("inner state");
+    ui.run(|| inner.set(true));
+    ui.frame();
+    ui.dispatch_system_back(progress);
+    ui.dispatch_system_back(SystemBackEvent::Cancelled);
+    ui.frame();
+    let entries = |entries: &[(&str, Option<SystemBackEvent>)]| {
+        entries
+            .iter()
+            .map(|&(name, event)| (name.to_owned(), event))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        log.take(),
+        entries(&[
+            ("outer", Some(started)),
+            ("outer", Some(progress)),
+            ("outer", Some(SystemBackEvent::Cancelled)),
+        ])
+    );
+
+    ui.dispatch_system_back(SystemBackEvent::Committed);
+    ui.frame();
+    assert_eq!(
+        log.take(),
+        entries(&[("inner", Some(SystemBackEvent::Committed)), ("inner", None)])
+    );
+    ui.dispatch_system_back(SystemBackEvent::Committed);
+    ui.frame();
+    assert_eq!(
+        log.take(),
+        entries(&[("outer", Some(SystemBackEvent::Committed)), ("outer", None)])
+    );
 }
 
 #[test]

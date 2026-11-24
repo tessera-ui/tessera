@@ -10,7 +10,7 @@ use tessera_components::{
         material_icons::{filled, outlined},
         navigation_drawer::navigation_drawer_item,
         scaffold::scaffold,
-        side_sheet::{SideSheetController, modal_side_sheet_provider},
+        side_sheet::{SideSheetController, modal_side_sheet},
         surface::surface,
         text::text,
         theme::{MaterialTheme, material_theme},
@@ -132,52 +132,48 @@ pub(crate) fn app(
                     surface()
                         .modifier(Modifier::new().fill_max_size())
                         .child(move || {
-                            modal_side_sheet_provider()
-                                .controller(side_sheet_controller)
-                                .main_content(move || {
-                                    shard_home().controller(nav_controller);
-                                })
-                                .side_sheet_content(move || {
-                                    column()
-                                        .modifier(Modifier::new().fill_max_width())
-                                        .children(move || {
-                                            drawer_header();
-                                            nav_item(
-                                                "ui-home",
-                                                HomePageDestination {},
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            )
-                                            .icon_asset(outlined::HOME_SVG)
-                                            .selected_icon_asset(filled::HOME_SVG);
-                                            nav_item(
-                                                "ui-material-components",
-                                                MaterialComponentsPageDestination {
-                                                    sessions: Some(sessions),
-                                                },
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            )
-                                            .icon_asset(outlined::WIDGETS_SVG)
-                                            .selected_icon_asset(filled::WIDGETS_SVG);
-                                            nav_item(
-                                                "ui-glass-components",
-                                                GlassComponentsPageDestination {},
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            )
-                                            .icon_asset(outlined::WATER_DROP_SVG)
-                                            .selected_icon_asset(filled::WATER_DROP_SVG);
-                                            nav_item(
-                                                "ui-custom-shader",
-                                                CustomShaderPageDestination {},
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            )
-                                            .icon_asset(outlined::PALETTE_SVG)
-                                            .selected_icon_asset(filled::PALETTE_SVG);
-                                        });
-                                });
+                            shard_home().controller(nav_controller);
+                            modal_side_sheet(side_sheet_controller).side_sheet_content(move || {
+                                column()
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .children(move || {
+                                        drawer_header();
+                                        nav_item(
+                                            "ui-home",
+                                            HomePageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        )
+                                        .icon_asset(outlined::HOME_SVG)
+                                        .selected_icon_asset(filled::HOME_SVG);
+                                        nav_item(
+                                            "ui-material-components",
+                                            MaterialComponentsPageDestination {
+                                                sessions: Some(sessions),
+                                            },
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        )
+                                        .icon_asset(outlined::WIDGETS_SVG)
+                                        .selected_icon_asset(filled::WIDGETS_SVG);
+                                        nav_item(
+                                            "ui-glass-components",
+                                            GlassComponentsPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        )
+                                        .icon_asset(outlined::WATER_DROP_SVG)
+                                        .selected_icon_asset(filled::WATER_DROP_SVG);
+                                        nav_item(
+                                            "ui-custom-shader",
+                                            CustomShaderPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        )
+                                        .icon_asset(outlined::PALETTE_SVG)
+                                        .selected_icon_asset(filled::PALETTE_SVG);
+                                    });
+                            });
                         });
                 });
         });

@@ -8,7 +8,7 @@ use tessera_components::{
         material_icons::filled,
         slider::{
             SliderController, SliderOrientation, SliderSize, SliderValueIndicatorVisibility,
-            centered_slider, range_slider, slider, slider_value_indicator_provider,
+            centered_slider, range_slider, slider,
         },
         surface::surface,
         text::text,
@@ -559,118 +559,110 @@ fn configuration_figure(optional: bool) {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move |value_indicator_host| {
-                        boxed()
-                            .modifier(Modifier::new().fill_max_size())
-                            .children(move || {
-                                if optional {
-                                    configuration_marker(1, Dp(197.0 * scale), Dp(159.0 * scale));
-                                    configuration_marker(2, Dp(505.0 * scale), Dp(159.0 * scale));
-                                    configuration_marker(3, Dp(815.0 * scale), Dp(159.0 * scale));
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            if optional {
+                                configuration_marker(1, Dp(197.0 * scale), Dp(159.0 * scale));
+                                configuration_marker(2, Dp(505.0 * scale), Dp(159.0 * scale));
+                                configuration_marker(3, Dp(815.0 * scale), Dp(159.0 * scale));
+                                configuration_slider(
+                                    "ui-inset-icon-configuration".into(),
+                                    SliderSize::Medium,
+                                    Dp(78.0 * scale),
+                                    Dp(273.0 * scale - 26.0),
+                                    Dp(234.0 * scale),
+                                    Dp(52.0),
+                                    false,
+                                    true,
+                                    0,
+                                    false,
+                                    false,
+                                );
+                                configuration_slider(
+                                    "ui-stops-configuration".into(),
+                                    SliderSize::ExtraSmall,
+                                    Dp(388.0 * scale),
+                                    Dp(273.0 * scale - 22.0),
+                                    Dp(234.0 * scale),
+                                    Dp(44.0),
+                                    false,
+                                    false,
+                                    9,
+                                    false,
+                                    false,
+                                );
+                                configuration_slider(
+                                    "ui-value-indicator-configuration".into(),
+                                    SliderSize::ExtraSmall,
+                                    Dp(698.0 * scale),
+                                    Dp(273.0 * scale - 22.0),
+                                    Dp(234.0 * scale),
+                                    Dp(44.0),
+                                    false,
+                                    false,
+                                    0,
+                                    true,
+                                    false,
+                                );
+                            } else {
+                                configuration_marker(1, Dp(241.0 * scale), Dp(99.0 * scale));
+                                configuration_marker(2, Dp(719.0 * scale), Dp(99.0 * scale));
+                                configuration_slider(
+                                    "ui-horizontal-orientation-configuration".into(),
+                                    SliderSize::Medium,
+                                    Dp(121.0 * scale),
+                                    Dp(223.0 * scale - 26.0),
+                                    Dp(248.0 * scale),
+                                    Dp(52.0),
+                                    false,
+                                    false,
+                                    0,
+                                    false,
+                                    true,
+                                );
+                                configuration_slider(
+                                    "ui-vertical-orientation-configuration".into(),
+                                    SliderSize::Medium,
+                                    Dp(247.0 * scale - 26.0),
+                                    Dp(317.0 * scale),
+                                    Dp(52.0),
+                                    Dp(288.0 * scale),
+                                    true,
+                                    false,
+                                    0,
+                                    false,
+                                    true,
+                                );
+                                for (index, center_y) in
+                                    [185.0, 265.0, 349.0, 445.0, 569.0].into_iter().enumerate()
+                                {
+                                    let item_height = [44.0, 44.0, 52.0, 68.0, 108.0][index];
                                     configuration_slider(
-                                        "ui-inset-icon-configuration".into(),
-                                        SliderSize::Medium,
-                                        Dp(78.0 * scale),
-                                        Dp(273.0 * scale - 26.0),
-                                        Dp(234.0 * scale),
-                                        Dp(52.0),
+                                        I18N.format(
+                                            "ui-value-size-configuration",
+                                            [(
+                                                "v0",
+                                                I18N.text(
+                                                    &(["ui-xs", "S", "M", "L", "ui-xl"][index]),
+                                                )
+                                                .into(),
+                                            )],
+                                        ),
+                                        SIZES[index],
+                                        Dp(530.0 * scale),
+                                        Dp(center_y * scale - item_height * 0.5),
+                                        Dp(380.0 * scale),
+                                        Dp(item_height),
                                         false,
-                                        true,
+                                        false,
                                         0,
                                         false,
-                                        false,
-                                    )
-                                    .value_indicator_host(value_indicator_host);
-                                    configuration_slider(
-                                        "ui-stops-configuration".into(),
-                                        SliderSize::ExtraSmall,
-                                        Dp(388.0 * scale),
-                                        Dp(273.0 * scale - 22.0),
-                                        Dp(234.0 * scale),
-                                        Dp(44.0),
-                                        false,
-                                        false,
-                                        9,
-                                        false,
-                                        false,
-                                    )
-                                    .value_indicator_host(value_indicator_host);
-                                    configuration_slider(
-                                        "ui-value-indicator-configuration".into(),
-                                        SliderSize::ExtraSmall,
-                                        Dp(698.0 * scale),
-                                        Dp(273.0 * scale - 22.0),
-                                        Dp(234.0 * scale),
-                                        Dp(44.0),
-                                        false,
-                                        false,
-                                        0,
                                         true,
-                                        false,
-                                    )
-                                    .value_indicator_host(value_indicator_host);
-                                } else {
-                                    configuration_marker(1, Dp(241.0 * scale), Dp(99.0 * scale));
-                                    configuration_marker(2, Dp(719.0 * scale), Dp(99.0 * scale));
-                                    configuration_slider(
-                                        "ui-horizontal-orientation-configuration".into(),
-                                        SliderSize::Medium,
-                                        Dp(121.0 * scale),
-                                        Dp(223.0 * scale - 26.0),
-                                        Dp(248.0 * scale),
-                                        Dp(52.0),
-                                        false,
-                                        false,
-                                        0,
-                                        false,
-                                        true,
-                                    )
-                                    .value_indicator_host(value_indicator_host);
-                                    configuration_slider(
-                                        "ui-vertical-orientation-configuration".into(),
-                                        SliderSize::Medium,
-                                        Dp(247.0 * scale - 26.0),
-                                        Dp(317.0 * scale),
-                                        Dp(52.0),
-                                        Dp(288.0 * scale),
-                                        true,
-                                        false,
-                                        0,
-                                        false,
-                                        true,
-                                    )
-                                    .value_indicator_host(value_indicator_host);
-                                    for (index, center_y) in
-                                        [185.0, 265.0, 349.0, 445.0, 569.0].into_iter().enumerate()
-                                    {
-                                        let item_height = [44.0, 44.0, 52.0, 68.0, 108.0][index];
-                                        configuration_slider(
-                                            I18N.format(
-                                                "ui-value-size-configuration",
-                                                [(
-                                                    "v0",
-                                                    I18N.text(
-                                                        ["ui-xs", "S", "M", "L", "ui-xl"][index],
-                                                    )
-                                                    .into(),
-                                                )],
-                                            ),
-                                            SIZES[index],
-                                            Dp(530.0 * scale),
-                                            Dp(center_y * scale - item_height * 0.5),
-                                            Dp(380.0 * scale),
-                                            Dp(item_height),
-                                            false,
-                                            false,
-                                            0,
-                                            false,
-                                            true,
-                                        )
-                                        .value_indicator_host(value_indicator_host);
-                                    }
+                                    );
                                 }
-                            });
-                    });
+                            }
+                        });
                 });
         }),
     );
@@ -689,15 +681,12 @@ fn configuration_slider(
     steps: usize,
     indicator: bool,
     end_stop: bool,
-
-    value_indicator_host: Option<tessera_components::md3::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     boxed()
         .modifier(Modifier::new().offset(x, y).width(width).height(height))
         .children(move || {
             let control = slider(value.get())
-                .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_size())
                 .size(size)
                 .orientation(if vertical {
@@ -822,67 +811,63 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                 .background(scheme.surface_container_low),
         )
         .children(move || {
-            slider_value_indicator_provider().child(move |value_indicator_host| {
-                boxed()
-                    .modifier(Modifier::new().fill_max_size())
-                    .children(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    boxed()
+                        .modifier(
+                            Modifier::new()
+                                .offset(Dp(156.0 * scale), Dp(168.0 * scale - 22.0))
+                                .width(Dp(200.0 * scale)),
+                        )
+                        .children(move || {
+                            slider(value.get())
+                                .modifier(watch_precise(geometry, "standard").fill_max_width())
+                                .size(SliderSize::ExtraSmall)
+                                .on_change(move |next| value.set(next))
+                                .controller(controller)
+                                .steps(9)
+                                .value_indicator(SliderValueIndicatorVisibility::Always)
+                                .accessibility_label(I18N.format(
+                                    "ui-value-slider-color-roles",
+                                    [("v0", I18N.text(&label).into())],
+                                ));
+                        });
+                    for (state, center, name) in
+                        [(empty, 331.0, "inactive"), (inset, 391.0, "active")]
+                    {
                         boxed()
                             .modifier(
                                 Modifier::new()
-                                    .offset(Dp(156.0 * scale), Dp(168.0 * scale - 22.0))
-                                    .width(Dp(200.0 * scale)),
+                                    .offset(Dp(166.0 * scale), Dp(center * scale - 26.0))
+                                    .width(Dp(185.0 * scale)),
                             )
                             .children(move || {
-                                slider(value.get())
-                                    .value_indicator_host(value_indicator_host)
-                                    .modifier(watch_precise(geometry, "standard").fill_max_width())
-                                    .size(SliderSize::ExtraSmall)
-                                    .on_change(move |next| value.set(next))
-                                    .controller(controller)
-                                    .steps(9)
-                                    .value_indicator(SliderValueIndicatorVisibility::Always)
-                                    .accessibility_label(I18N.format(
-                                        "ui-value-slider-color-roles",
-                                        [("v0", I18N.text(label).into())],
-                                    ));
+                                slider(state.get())
+                                    .modifier(watch_precise(geometry, name).fill_max_width())
+                                    .size(SliderSize::Medium)
+                                    .on_change(move |next| state.set(next))
+                                    .inset_icon(filled::VOLUME_UP_SVG)
+                                    .accessibility_label(
+                                        I18N.format(
+                                            "ui-value-value-inset-color-roles",
+                                            [
+                                                ("v0", I18N.text(&label).into()),
+                                                (
+                                                    "v1",
+                                                    I18N.text(if name == "inactive" {
+                                                        "ui-inactive"
+                                                    } else {
+                                                        "ui-active"
+                                                    })
+                                                    .into(),
+                                                ),
+                                            ],
+                                        ),
+                                    );
                             });
-                        for (state, center, name) in
-                            [(empty, 331.0, "inactive"), (inset, 391.0, "active")]
-                        {
-                            boxed()
-                                .modifier(
-                                    Modifier::new()
-                                        .offset(Dp(166.0 * scale), Dp(center * scale - 26.0))
-                                        .width(Dp(185.0 * scale)),
-                                )
-                                .children(move || {
-                                    slider(state.get())
-                                        .value_indicator_host(value_indicator_host)
-                                        .modifier(watch_precise(geometry, name).fill_max_width())
-                                        .size(SliderSize::Medium)
-                                        .on_change(move |next| state.set(next))
-                                        .inset_icon(filled::VOLUME_UP_SVG)
-                                        .accessibility_label(
-                                            I18N.format(
-                                                "ui-value-value-inset-color-roles",
-                                                [
-                                                    ("v0", I18N.text(label).into()),
-                                                    (
-                                                        "v1",
-                                                        I18N.text(if name == "inactive" {
-                                                            "ui-inactive"
-                                                        } else {
-                                                            "ui-active"
-                                                        })
-                                                        .into(),
-                                                    ),
-                                                ],
-                                            ),
-                                        );
-                                });
-                        }
-                    });
-            });
+                    }
+                });
             color_annotations(geometry, value.get(), controller, dark);
         });
 }
@@ -899,16 +884,19 @@ fn color_marker(number: usize, center_x: Dp, center_y: Dp, dark: bool) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(I18N.format(
-                        "ui-slider-color-marker-value-value",
-                        [
-                            ("v0", (number).into()),
-                            (
-                                "v1",
-                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
-                            ),
-                        ],
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-slider-color-marker-value-value",
+                            [
+                                ("v0", (number).into()),
+                                (
+                                    "v1",
+                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1043,13 +1031,11 @@ fn state_panel(width: Dp, height: Dp, dark: bool) {
     let scale = width.0 / 512.0;
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed().modifier(Modifier::new().offset(if dark { width } else { Dp::ZERO }, Dp::ZERO).size(width, height).background(scheme.surface_container_low)).children(move || {
-        slider_value_indicator_provider().child(move |value_indicator_host| {
             boxed().modifier(Modifier::new().fill_max_size()).children(move || {
                 for (index, label, state) in [(0, "ui-enabled", InteractionVisualState::Rest), (1, "ui-disabled", InteractionVisualState::Rest), (2, "ui-hovered", InteractionVisualState::Hover), (3, "ui-focused", InteractionVisualState::Focus), (4, "ui-pressed", InteractionVisualState::Pressed)] {
-                    state_specimen(index, label.to_owned(), state, width, dark).value_indicator_host(value_indicator_host);
+                    state_specimen(index, label.to_owned(), state, width, dark);
                 }
             });
-        });
         let mut svg = String::new();
         for index in [2, 4] {
             let x = (289.0 + if dark { 12.0 } else { 0.0 }) * scale;
@@ -1067,8 +1053,6 @@ fn state_specimen(
     state: InteractionVisualState,
     width: Dp,
     dark: bool,
-
-    value_indicator_host: Option<tessera_components::md3::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     let scale = width.0 / 512.0;
@@ -1083,23 +1067,25 @@ fn state_specimen(
         )
         .children(move || {
             slider(value.get())
-                .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_width())
                 .size(SliderSize::ExtraSmall)
                 .on_change(move |next| value.set(next))
                 .disabled(index == 1)
                 .presentation_state(state)
                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction)
-                .accessibility_label(I18N.format(
-                    "ui-value-value-slider-state",
-                    [
-                        (
-                            "v0",
-                            I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
-                        ),
-                        ("v1", I18N.text(&label).into()),
-                    ],
-                ));
+                .accessibility_label(
+                    I18N.format(
+                        "ui-value-value-slider-state",
+                        [
+                            (
+                                "v0",
+                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                    .into(),
+                            ),
+                            ("v1", I18N.text(&label).into()),
+                        ],
+                    ),
+                );
         });
     boxed()
         .alignment(Alignment::Center)
@@ -1110,16 +1096,19 @@ fn state_specimen(
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(I18N.format(
-                        "ui-slider-state-marker-value-value",
-                        [
-                            ("v0", (index + 1).into()),
-                            (
-                                "v1",
-                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
-                            ),
-                        ],
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-slider-state-marker-value-value",
+                            [
+                                ("v0", (index + 1).into()),
+                                (
+                                    "v1",
+                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1218,53 +1207,44 @@ fn slider_figure(measurements: bool) {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move |value_indicator_host| {
-                        boxed()
-                            .modifier(Modifier::new().fill_max_size())
-                            .children(move || {
-                                boxed()
-                                    .modifier(
-                                        Modifier::new()
-                                            .align(Alignment::TopCenter)
-                                            .offset(Dp(0.0), Dp(height * 0.416 - 24.0))
-                                            .width(Dp(208.0)),
-                                    )
-                                    .children(move || {
-                                        slider(value.get())
-                                            .value_indicator_host(value_indicator_host)
-                                            .modifier(
-                                                watch_precise(geometry, "standard")
-                                                    .fill_max_width(),
-                                            )
-                                            .controller(controller)
-                                            .size(SliderSize::ExtraSmall)
-                                            .on_change(move |v| value.set(v))
-                                            .steps(9)
-                                            .value_indicator(SliderValueIndicatorVisibility::Always)
-                                            .accessibility_label(I18N.text("ui-slider-anatomy"));
-                                    });
-                                boxed()
-                                    .modifier(
-                                        Modifier::new()
-                                            .align(Alignment::TopCenter)
-                                            .offset(Dp(0.0), Dp(height * 0.734 - 26.0))
-                                            .width(Dp(192.0)),
-                                    )
-                                    .children(move || {
-                                        slider(inset.get())
-                                            .value_indicator_host(value_indicator_host)
-                                            .modifier(
-                                                watch_precise(geometry, "inset").fill_max_width(),
-                                            )
-                                            .size(SliderSize::Medium)
-                                            .on_change(move |v| inset.set(v))
-                                            .inset_icon(filled::VOLUME_UP_SVG)
-                                            .accessibility_label(
-                                                I18N.text("ui-slider-inset-anatomy"),
-                                            );
-                                    });
-                            });
-                    });
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            boxed()
+                                .modifier(
+                                    Modifier::new()
+                                        .align(Alignment::TopCenter)
+                                        .offset(Dp(0.0), Dp(height * 0.416 - 24.0))
+                                        .width(Dp(208.0)),
+                                )
+                                .children(move || {
+                                    slider(value.get())
+                                        .modifier(
+                                            watch_precise(geometry, "standard").fill_max_width(),
+                                        )
+                                        .controller(controller)
+                                        .size(SliderSize::ExtraSmall)
+                                        .on_change(move |v| value.set(v))
+                                        .steps(9)
+                                        .value_indicator(SliderValueIndicatorVisibility::Always)
+                                        .accessibility_label(I18N.text("ui-slider-anatomy"));
+                                });
+                            boxed()
+                                .modifier(
+                                    Modifier::new()
+                                        .align(Alignment::TopCenter)
+                                        .offset(Dp(0.0), Dp(height * 0.734 - 26.0))
+                                        .width(Dp(192.0)),
+                                )
+                                .children(move || {
+                                    slider(inset.get())
+                                        .modifier(watch_precise(geometry, "inset").fill_max_width())
+                                        .size(SliderSize::Medium)
+                                        .on_change(move |v| inset.set(v))
+                                        .inset_icon(filled::VOLUME_UP_SVG)
+                                        .accessibility_label(I18N.text("ui-slider-inset-anatomy"));
+                                });
+                        });
                     slider_annotations(geometry, value.get(), controller, measurements);
                 });
         }),
@@ -1409,49 +1389,46 @@ fn slider_measurement_figure() {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move |value_indicator_host| {
-                        boxed()
-                            .modifier(Modifier::new().fill_max_size())
-                            .children(move || {
-                                for (name, state, controller, x) in [
-                                    ("first", first, first_controller, 0.3013),
-                                    ("second", second, second_controller, 0.7265),
-                                ] {
-                                    boxed()
-                                        .modifier(Modifier::new().width(Dp(296.0)).offset(
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            for (name, state, controller, x) in [
+                                ("first", first, first_controller, 0.3013),
+                                ("second", second, second_controller, 0.7265),
+                            ] {
+                                boxed()
+                                    .modifier(
+                                        Modifier::new().width(Dp(296.0)).offset(
                                             Dp(width * x - 148.0),
                                             Dp(height * 0.5533 - 24.0),
-                                        ))
-                                        .children(move || {
-                                            slider(state.get())
-                                                .value_indicator_host(value_indicator_host)
-                                                .modifier(
-                                                    watch_precise(geometry, name).fill_max_width(),
-                                                )
-                                                .controller(controller)
-                                                .on_change(move |v| state.set(v))
-                                                .size(SliderSize::ExtraSmall)
-                                                .value_indicator(
-                                                    SliderValueIndicatorVisibility::Always,
-                                                )
-                                                .accessibility_label(
-                                                    I18N.format(
-                                                        "ui-value-slider-measurements",
-                                                        [(
-                                                            "v0",
-                                                            I18N.text(if name == "first" {
-                                                                "ui-first"
-                                                            } else {
-                                                                "ui-second"
-                                                            })
-                                                            .into(),
-                                                        )],
-                                                    ),
-                                                );
-                                        });
-                                }
-                            });
-                    });
+                                        ),
+                                    )
+                                    .children(move || {
+                                        slider(state.get())
+                                            .modifier(
+                                                watch_precise(geometry, name).fill_max_width(),
+                                            )
+                                            .controller(controller)
+                                            .on_change(move |v| state.set(v))
+                                            .size(SliderSize::ExtraSmall)
+                                            .value_indicator(SliderValueIndicatorVisibility::Always)
+                                            .accessibility_label(
+                                                I18N.format(
+                                                    "ui-value-slider-measurements",
+                                                    [(
+                                                        "v0",
+                                                        I18N.text(if name == "first" {
+                                                            "ui-first"
+                                                        } else {
+                                                            "ui-second"
+                                                        })
+                                                        .into(),
+                                                    )],
+                                                ),
+                                            );
+                                    });
+                            }
+                        });
                     slider_measurement_annotations(
                         geometry,
                         first.get(),
@@ -1632,13 +1609,16 @@ fn size_specimen(
                         .size(SIZES[index])
                         .controller(controller)
                         .on_change(move |next| value.set(next))
-                        .accessibility_label(I18N.format(
-                            "ui-value-size-measurements",
-                            [(
-                                "v0",
-                                I18N.text(["ui-xs", "S", "M", "L", "ui-xl"][index]).into(),
-                            )],
-                        ));
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-value-size-measurements",
+                                [(
+                                    "v0",
+                                    I18N.text(&(["ui-xs", "S", "M", "L", "ui-xl"][index]))
+                                        .into(),
+                                )],
+                            ),
+                        );
                     if index >= 2 {
                         specimen.inset_icon(filled::VOLUME_UP_SVG);
                     }

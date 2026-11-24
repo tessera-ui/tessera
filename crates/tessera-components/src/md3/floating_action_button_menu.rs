@@ -7,28 +7,28 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
-    FocusScopeNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::{HasPopup, Role},
+    focus::defer_keyboard_until_layout,
     launch,
-    layout::MeasureScope,
+    layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
+    popup::{PopupPositionInput, PopupPositionPolicy, WindowOrigin, popup},
     remember, tessera,
     time::Instant,
-    use_context, winit,
+    use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     animation::{Animatable, FrameDelta, Motion, animate_to},
-    boxed::boxed,
     column::column,
     md3::{
         icon::icon, material_icons::filled, modifier::ModifierExt as _,
         scrollable::ScrollableController, surface::surface, text::text, theme::MaterialTheme,
     },
-    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
+    modifier::ModifierExt as _,
     painter::Painter,
-    pos_misc::is_position_in_rect,
     res::I18N,
     shape_def::{RoundedCorner, Shape},
 };
@@ -204,81 +204,41 @@ impl Motion for MenuMotion {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-struct PanelBounds {
-    position: PxPosition,
-    size: ComputedData,
-}
-
-impl Default for PanelBounds {
-    fn default() -> Self {
-        Self {
-            position: PxPosition::ZERO,
-            size: ComputedData::ZERO,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq)]
-struct MenuLayout {
-    alignment: FloatingActionButtonMenuAlignment,
-    bounds: State<PanelBounds>,
-}
-
-impl tessera_ui::LayoutPolicy for MenuLayout {
-    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let children = input.children();
-        let main = children[0].measure(input, &input.parent_constraint().without_min())?;
-        let parent = input.parent_constraint();
-        let size = ComputedData {
-            width: parent.width().resolve_max().unwrap_or(main.width),
-            height: parent.height().resolve_max().unwrap_or(main.height),
+impl PopupPositionPolicy for FloatingActionButtonMenuAlignment {
+    fn position(&self, input: &PopupPositionInput) -> PxPosition {
+        let bounds = input.bounds;
+        let anchor = input.anchor.window_bounds();
+        let width = input.popup_size.width.to_f32();
+        let height = input.popup_size.height.to_f32();
+        let x = match self {
+            Self::Start => anchor.x,
+            Self::End => anchor.x + anchor.width - width,
         };
-        children[1].measure(input, &Constraint::exact(size.width, size.height))?;
-        let margin = Dp(16.0).to_px();
-        let panel = children[2].measure(
-            input,
-            &Constraint::new(
-                AxisConstraint::new(Px::ZERO, Some((size.width - margin * 2).max(Px::ZERO))),
-                AxisConstraint::new(Px::ZERO, Some((size.height - margin * 2).max(Px::ZERO))),
-            ),
-        )?;
-        let x = match self.alignment {
-            FloatingActionButtonMenuAlignment::Start => {
-                margin.min((size.width - panel.width).max(Px::ZERO))
-            }
-            FloatingActionButtonMenuAlignment::End => {
-                (size.width - margin - panel.width).max(Px::ZERO)
-            }
-        };
-        let position = PxPosition::new(x, (size.height - margin - panel.height).max(Px::ZERO));
-        self.bounds.set_if_changed(PanelBounds {
-            position,
-            size: panel.size(),
-        });
-        let mut result = LayoutResult::new(size);
-        result.place_child(children[0], PxPosition::ZERO);
-        result.place_child(children[1], PxPosition::ZERO);
-        result.place_child(children[2], position);
-        Ok(result)
+        let y = anchor.y + anchor.height - height;
+        PxPosition::from_f32_xy(
+            x.clamp(bounds.x, bounds.x + (bounds.width - width).max(0.0)),
+            y.clamp(bounds.y, bounds.y + (bounds.height - height).max(0.0)),
+        )
     }
 }
 
 #[derive(Clone, Copy, PartialEq)]
 struct PanelLayout {
     alignment: FloatingActionButtonMenuAlignment,
+    max_height: Px,
 }
 
 impl tessera_ui::LayoutPolicy for PanelLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
-        let button = children[1].measure(input, &input.parent_constraint().without_min())?;
+        let button = children[0].measure(input, &input.parent_constraint().without_min())?;
         let max_height = input
             .parent_constraint()
             .height()
             .resolve_max()
-            .unwrap_or(Px::MAX);
-        let list = children[0].measure(
+            .unwrap_or(Px::MAX)
+            .min(self.max_height);
+        let list = children[1].measure(
             input,
             &Constraint::new(
                 input.parent_constraint().width().without_min(),
@@ -300,9 +260,9 @@ impl tessera_ui::LayoutPolicy for PanelLayout {
             FloatingActionButtonMenuAlignment::Start => Px::ZERO,
             FloatingActionButtonMenuAlignment::End => width - child_width,
         };
-        result.place_child(children[0], PxPosition::new(x(list.width), Px::ZERO));
+        result.place_child(children[1], PxPosition::new(x(list.width), Px::ZERO));
         result.place_child(
-            children[1],
+            children[0],
             PxPosition::new(x(button.width), list.height + gap),
         );
         Ok(result)
@@ -394,7 +354,6 @@ impl tessera_ui::LayoutPolicy for RevealLayout {
 struct MenuData {
     items: Vec<FloatingActionButtonMenuItem>,
     requesters: Vec<FocusRequester>,
-    trigger: FocusRequester,
     expanded: bool,
     enabled: bool,
     alignment: FloatingActionButtonMenuAlignment,
@@ -404,12 +363,12 @@ struct MenuData {
     scrim_color: Color,
 }
 
-fn dismiss(state: State<FloatingActionButtonMenuController>, trigger: FocusRequester) {
+fn dismiss(state: State<FloatingActionButtonMenuController>) {
     state.with_mut(FloatingActionButtonMenuController::close);
-    trigger.request_focus();
+    defer_keyboard_until_layout();
 }
 
-fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
+fn focus_properties(data: &MenuData, index: usize, trigger: FocusRequester) -> FocusProperties {
     let enabled: Vec<_> = data
         .items
         .iter()
@@ -425,7 +384,7 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
         .unwrap_or(order.len() - 1);
     let requester = |i: usize| {
         if i == data.items.len() {
-            data.trigger
+            trigger
         } else {
             data.requesters[i]
         }
@@ -456,10 +415,9 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 /// - `controller` — optional shared visibility state; otherwise stored internally.
 /// - `items` — action labels, optional icons, and callbacks; missing callbacks
 ///   disable actions.
-/// - `main_content` — page content beneath the menu, preserved across
-///   visibility changes.
-/// - `modifier` — size and placement of the entire menu host.
-/// - `alignment` — bottom start or bottom end, inset by 16dp.
+/// - `modifier` — placement of the collapsed button in the enclosing layout.
+/// - `alignment` — align the action list to the start or end edge of the button.
+/// - `modal` — block interaction outside the expanded menu, enabled by default.
 /// - `color` — primary, secondary, or tertiary theme colors.
 /// - `scrim_color` — optional overlay color; transparent by default.
 /// - `enabled` — whether the toggle and actions accept input.
@@ -468,34 +426,31 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::{
-///     floating_action_button_menu::{FloatingActionButtonMenuItem, floating_action_button_menu},
-///     text::text,
-///     theme::material_theme,
+/// use tessera_components::md3::floating_action_button_menu::{
+///     FloatingActionButtonMenuController, floating_action_button_menu,
 /// };
-/// use tessera_ui::{Callback, remember, tessera};
+/// use tessera_ui::{remember, tessera};
+///
+/// let mut visibility = FloatingActionButtonMenuController::new();
+/// assert!(!visibility.is_expanded());
+/// visibility.open();
+/// assert!(visibility.is_expanded());
+/// visibility.close();
+/// assert!(!visibility.is_expanded());
 ///
 /// #[tessera]
 /// fn creation_actions() {
-///     let created = remember(|| false);
-///     material_theme().child(move || {
-///         floating_action_button_menu()
-///             .items(vec![FloatingActionButtonMenuItem::new(
-///                 "New note",
-///                 None,
-///                 Callback::new(move || created.set(true)),
-///             )])
-///             .main_content(move || text(if created.get() { "Note created" } else { "Notes" }));
-///     });
+///     let state = remember(FloatingActionButtonMenuController::new);
+///     floating_action_button_menu().controller(state);
 /// }
 /// ```
 #[tessera]
 pub fn floating_action_button_menu(
     controller: Option<State<FloatingActionButtonMenuController>>,
     items: Option<Vec<FloatingActionButtonMenuItem>>,
-    main_content: Option<RenderSlot>,
     modifier: Option<Modifier>,
     alignment: Option<FloatingActionButtonMenuAlignment>,
+    modal: Option<bool>,
     color: Option<FloatingActionButtonMenuColor>,
     scrim_color: Option<Color>,
     enabled: Option<bool>,
@@ -538,6 +493,7 @@ pub fn floating_action_button_menu(
         ],
     };
     let alignment = alignment.unwrap_or_default();
+    let modal = modal.unwrap_or(true);
     let trigger = remember(FocusRequester::new).get();
     let requesters = remember(Vec::<FocusRequester>::new);
     if requesters.with(|v| v.len()) != items.len() {
@@ -546,13 +502,12 @@ pub fn floating_action_button_menu(
     let current = MenuData {
         items,
         requesters: requesters.get(),
-        trigger,
         expanded,
         enabled,
         alignment,
         colors,
-        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions")),
-        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions")),
+        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions").into()),
+        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions").into()),
         scrim_color: scrim_color.unwrap_or(Color::TRANSPARENT),
     };
     let data = remember(|| current.clone());
@@ -562,64 +517,70 @@ pub fn floating_action_button_menu(
     let count = data.with(|data| data.items.len());
     let motion = remember(|| MenuMotion::new(expanded, count));
     launch((expanded, count), animate_to(motion, (expanded, count)));
-    let bounds = remember(PanelBounds::default);
-    let pending_focus = remember(|| false);
-    let previous = remember(|| false);
-    if previous.get() != expanded {
-        previous.set(expanded);
-        pending_focus.set(true);
-    }
-    tessera_ui::layout::layout(MenuLayout { alignment, bounds })
+    layout(Stack)
         .modifier(modifier.unwrap_or_default())
+        .child(move || fab_menu_anchor(data, state, motion, trigger, modal));
+}
+
+#[tessera]
+fn fab_menu_anchor(
+    data: State<MenuData>,
+    state: State<FloatingActionButtonMenuController>,
+    motion: State<MenuMotion>,
+    trigger: FocusRequester,
+    modal: bool,
+) {
+    let popup_trigger = remember(FocusRequester::new).get();
+    let visible = remember(|| false);
+    let max_height = remember(|| Px::MAX);
+    layout(Stack)
+        .modifier(
+            Modifier::new()
+                .size(Dp(56.0), Dp(56.0))
+                .on_globally_positioned_precise(move |bounds: tessera_ui::FloatRect| {
+                    max_height
+                        .set_if_changed(Px((bounds.y + bounds.height - Dp(16.0).to_pixels_f32())
+                            .floor()
+                            .max(0.0) as i32));
+                })
+                .on_visible_window_bounds(move |bounds: Option<tessera_ui::FloatRect>| {
+                    visible.set_if_changed(bounds.is_some());
+                }),
+        )
         .child(move || {
-            boxed()
-                .modifier(Modifier::new().semantics(SemanticsArgs {
-                    hidden: data.with(|data| data.expanded),
-                    merge_descendants: true,
-                    ..Default::default()
-                }))
-                .children_optional(main_content);
-            fab_menu_scrim(data, state, motion).bounds(bounds);
-            fab_menu_panel(data, state, motion, pending_focus);
+            let popup_visible = visible.get()
+                && (data.with(|data| data.expanded)
+                    || motion.with(|motion| motion.is_visible() || motion.toggle.value() > 0.001));
+            fab_menu_toggle(data, state, trigger, 0.0, false, popup_visible);
+            if popup_visible {
+                let color = data.with(|data| data.scrim_color);
+                if color != Color::TRANSPARENT {
+                    fab_menu_scrim(color);
+                }
+                fab_menu_popup(data, state, motion, popup_trigger, max_height.get(), modal);
+            }
         });
 }
 
 #[tessera]
-fn fab_menu_scrim(
+fn fab_menu_scrim(color: Color) {
+    popup(WindowOrigin).modifier(Modifier::new().fill_max_size().background(color));
+}
+
+#[tessera]
+fn fab_menu_popup(
     data: State<MenuData>,
     state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
-    bounds: Option<State<PanelBounds>>,
+    trigger: FocusRequester,
+    max_height: Px,
+    modal: bool,
 ) {
-    let bounds = bounds.expect("menu bounds must be provided");
-    let active = data.with(|data| data.expanded) || motion.with(MenuMotion::is_visible);
-    let modifier = if active {
-        with_pointer_input(Modifier::new().fill_max_size(), move |mut input| {
-            let bounds = bounds.get();
-            let outside = input.cursor_position_rel.is_some_and(|position| {
-                !is_position_in_rect(
-                    position,
-                    bounds.position,
-                    bounds.size.width,
-                    bounds.size.height,
-                )
-            });
-            let close = outside && input.has_unconsumed_release();
-            input.block_all();
-            if close {
-                dismiss(state, data.with(|data| data.trigger));
-            }
-        })
-    } else {
-        Modifier::new().fill_max_size()
-    };
-    boxed()
-        .modifier(modifier.background(if active {
-            data.with(|data| data.scrim_color)
-        } else {
-            Color::TRANSPARENT
-        }))
-        .children(|| {});
+    let alignment = data.with(|data| data.alignment);
+    popup(alignment)
+        .modal(modal)
+        .on_dismiss_request(move || state.with_mut(FloatingActionButtonMenuController::close))
+        .child(move || fab_menu_panel(data, state, motion, trigger, max_height));
 }
 
 #[tessera]
@@ -627,42 +588,26 @@ fn fab_menu_panel(
     data: State<MenuData>,
     state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
-    pending_focus: State<bool>,
+    trigger: FocusRequester,
+    max_height: Px,
 ) {
     let snapshot = data.get();
-    let scope = remember(FocusScopeNode::new).get();
     let scroll = remember(ScrollableController::new);
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .focus_scope(Some(scope))
-            .semantics(SemanticsArgs {
-                test_tag: cfg!(test).then(|| "fab-menu-panel".into()),
-                merge_descendants: true,
-                ..Default::default()
-            }),
-        move |mut input| {
-            if !data.with(|data| data.expanded)
-                || input.key_modifiers.control_key()
-                || input.key_modifiers.alt_key()
-                || input.key_modifiers.super_key()
-            {
-                return;
-            }
-            if input.keyboard_events.iter().any(|event| {
-                event.state == winit::event::ElementState::Pressed
-                    && event.logical_key
-                        == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
-            }) {
-                dismiss(state, data.with(|data| data.trigger));
-                input.block_keyboard();
-            }
-        },
-    );
-    tessera_ui::layout::layout(PanelLayout {
+    let modifier = Modifier::new();
+    #[cfg(test)]
+    let modifier = modifier.semantics(SemanticsArgs {
+        test_tag: Some("fab-menu-panel".into()),
+        merge_descendants: true,
+        ..Default::default()
+    });
+    layout(PanelLayout {
         alignment: snapshot.alignment,
+        max_height,
     })
     .modifier(modifier)
     .child(move || {
+        let progress = motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0));
+        fab_menu_toggle(data, state, trigger, progress, true, false);
         column()
             .modifier(
                 Modifier::new()
@@ -695,70 +640,87 @@ fn fab_menu_panel(
                         data,
                         state,
                         motion,
+                        trigger,
                         first_visible.is_some_and(|first| index > first),
                     );
                 }
             });
-        let snapshot = data.get();
-        let progress = motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0));
-        let corner = RoundedCorner::manual(Dp(16.0 + 12.0 * f64::from(progress)), 3.0 - progress);
-        let semantics = SemanticsArgs {
-            expanded: Some(snapshot.expanded),
-            has_popup: Some(HasPopup::Menu),
-            ..Default::default()
-        };
-        surface()
-            .modifier(
-                Modifier::new()
-                    .size(Dp(56.0), Dp(56.0))
-                    .semantics(semantics)
-                    .on_globally_positioned(move |_| {
-                        if pending_focus.get() {
-                            pending_focus.set(false);
-                            data.with(|data| data.trigger).request_focus();
-                        }
-                    }),
-            )
-            .style(
-                snapshot.colors[0]
-                    .lerp(&snapshot.colors[2], progress)
-                    .into(),
-            )
-            .content_color(snapshot.colors[1].lerp(&snapshot.colors[3], progress))
-            .shape(Shape::RoundedRectangle {
-                top_left: corner,
-                top_right: corner,
-                bottom_right: corner,
-                bottom_left: corner,
-            })
-            .elevation(Dp(6.0))
-            .tonal_elevation(Dp(0.0))
-            .content_alignment(Alignment::Center)
-            .enabled(snapshot.enabled)
-            .accessibility_label(if snapshot.expanded {
-                snapshot.close_label.clone()
-            } else {
-                snapshot.open_label.clone()
-            })
-            .accessibility_focusable(snapshot.enabled)
-            .focus_requester(snapshot.trigger)
-            .focus_properties(focus_properties(&snapshot, snapshot.items.len()))
-            .on_click(move || {
-                state.with_mut(FloatingActionButtonMenuController::toggle);
-            })
-            .child(move || {
-                icon()
-                    .painter(if data.with(|data| data.expanded) {
-                        filled::CLOSE_SVG
-                    } else {
-                        filled::ADD_SVG
-                    })
-                    .size(Dp(24.0
-                        - f64::from(
-                            motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0)),
-                        ) * 4.0));
-            });
     });
+}
+
+#[tessera]
+fn fab_menu_toggle(
+    data: State<MenuData>,
+    state: State<FloatingActionButtonMenuController>,
+    trigger: FocusRequester,
+    progress: f32,
+    popup_toggle: bool,
+    hidden: bool,
+) {
+    let snapshot = data.get();
+    let corner = RoundedCorner::manual(Dp(16.0 + 12.0 * f64::from(progress)), 3.0 - progress);
+    let semantics = SemanticsArgs {
+        expanded: Some(popup_toggle && snapshot.expanded),
+        has_popup: Some(HasPopup::Menu),
+        hidden,
+        test_tag: cfg!(test).then(|| {
+            if popup_toggle {
+                "fab-menu-close"
+            } else {
+                "fab-menu-open"
+            }
+            .into()
+        }),
+        ..Default::default()
+    };
+    surface()
+        .modifier(
+            Modifier::new()
+                .size(Dp(56.0), Dp(56.0))
+                .alpha(if hidden { 0.0 } else { 1.0 })
+                .semantics(semantics),
+        )
+        .style(
+            snapshot.colors[0]
+                .lerp(&snapshot.colors[2], progress)
+                .into(),
+        )
+        .content_color(snapshot.colors[1].lerp(&snapshot.colors[3], progress))
+        .shape(Shape::RoundedRectangle {
+            top_left: corner,
+            top_right: corner,
+            bottom_right: corner,
+            bottom_left: corner,
+        })
+        .elevation(Dp(6.0))
+        .tonal_elevation(Dp(0.0))
+        .content_alignment(Alignment::Center)
+        .enabled(snapshot.enabled)
+        .accessibility_label(if popup_toggle && snapshot.expanded {
+            snapshot.close_label.clone()
+        } else {
+            snapshot.open_label.clone()
+        })
+        .accessibility_focusable(snapshot.enabled)
+        .focus_requester(trigger)
+        .focus_properties(if popup_toggle {
+            focus_properties(&snapshot, snapshot.items.len(), trigger)
+        } else {
+            FocusProperties::default()
+        })
+        .on_click(move || {
+            state.with_mut(FloatingActionButtonMenuController::toggle);
+            defer_keyboard_until_layout();
+        })
+        .child(move || {
+            icon()
+                .painter(if popup_toggle && data.with(|data| data.expanded) {
+                    filled::CLOSE_SVG
+                } else {
+                    filled::ADD_SVG
+                })
+                .size(Dp(24.0 - f64::from(progress) * 4.0));
+        });
 }
 
 #[tessera]
@@ -767,6 +729,7 @@ fn fab_menu_action(
     data: State<MenuData>,
     state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
+    trigger: FocusRequester,
     gap: bool,
 ) {
     let snapshot = data.get();
@@ -815,10 +778,10 @@ fn fab_menu_action(
             .accessibility_label(item.label.clone())
             .accessibility_focusable(enabled)
             .focus_requester(snapshot.requesters[index])
-            .focus_properties(focus_properties(&snapshot, index).can_focus(enabled))
+            .focus_properties(focus_properties(&snapshot, index, trigger).can_focus(enabled))
             .on_click(move || {
                 let snapshot = data.get();
-                dismiss(state, snapshot.trigger);
+                dismiss(state);
                 if let Some(callback) = &snapshot.items[index].on_click {
                     callback.call();
                 }
@@ -830,7 +793,7 @@ fn fab_menu_action(
                 .child(move || {
                     let item = data.with(|data| data.items[index].clone());
                     let style = use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
+                        .unwrap()
                         .get()
                         .typography
                         .title_medium;
@@ -849,7 +812,7 @@ fn fab_menu_action(
 mod tests {
     use tessera_ui::testing::UiTest;
 
-    use crate::{animation::test_instant, md3::theme::material_theme};
+    use crate::{animation::test_instant, boxed::boxed, md3::theme::material_theme};
 
     use super::*;
 
@@ -882,7 +845,7 @@ mod tests {
         }
         material_theme().child(move || {
             let probe = probe.clone();
-            let items = (0..count)
+            let items: Vec<_> = (0..count)
                 .map(|index| FloatingActionButtonMenuItem {
                     label: format!("Action {index}"),
                     icon: Some(filled::EDIT_SVG.into()),
@@ -893,19 +856,36 @@ mod tests {
                     },
                 })
                 .collect();
-            floating_action_button_menu()
-                .controller(state)
-                .alignment(alignment)
-                .items(items)
-                .main_content(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_size().clip_to_bounds())
+                .children(move || {
                     let background = remember(|| 7usize);
                     if let Some(probe) = &probe {
                         probe.with_mut(|handles| handles.background = Some(background));
                     }
                     surface()
-                        .modifier(Modifier::new().size(Dp(120.0), Dp(48.0)))
+                        .modifier(
+                            Modifier::new()
+                                .size(Dp(120.0), Dp(48.0))
+                                .align(Alignment::TopStart),
+                        )
+                        .accessibility_label("Background")
                         .on_click(move || background.with_mut(|value| *value += 1))
                         .child(|| {});
+                    floating_action_button_menu()
+                        .controller(state)
+                        .alignment(alignment)
+                        .items(items.clone())
+                        .modifier(
+                            Modifier::new()
+                                .align(match alignment {
+                                    FloatingActionButtonMenuAlignment::Start => {
+                                        Alignment::BottomStart
+                                    }
+                                    FloatingActionButtonMenuAlignment::End => Alignment::BottomEnd,
+                                })
+                                .padding_all(Dp(16.0)),
+                        );
                 });
         });
     }
@@ -916,7 +896,7 @@ mod tests {
             let snapshot = UiTest::new()
                 .content(|| fixture(true, FloatingActionButtonMenuAlignment::End, 3))
                 .viewport(width, height)
-                .frame();
+                .frames(3);
             let panel = snapshot.node("fab-menu-panel").bounds();
             assert_eq!(panel.x + panel.width, Px::new(width as i32 - 16));
             assert_eq!(panel.y + panel.height, Px::new(height as i32 - 16));
@@ -940,8 +920,8 @@ mod tests {
             .content(|| fixture(false, FloatingActionButtonMenuAlignment::Start, 3))
             .viewport(400, 400)
             .frame();
-        snapshot.node("fab-menu-panel").size(56, 56);
-        assert_eq!(snapshot.node("fab-menu-panel").bounds().x, Px::new(16));
+        snapshot.node("fab-menu-open").size(56, 56);
+        assert_eq!(snapshot.node("fab-menu-open").bounds().x, Px::new(16));
     }
 
     #[test]
@@ -1022,7 +1002,7 @@ mod tests {
             .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuController::open);
-        session.frames(1);
+        session.frames(3);
         click(&mut session, 60.0, 24.0);
         assert!(
             !probe
@@ -1035,6 +1015,45 @@ mod tests {
             probe.get().background.unwrap().get(),
             8,
             "dismissal must not click through"
+        );
+    }
+
+    #[test]
+    fn escape_closes_modal_menu_and_restores_focus_to_the_fab() {
+        let mut ui = UiTest::new()
+            .content(|| fixture(false, FloatingActionButtonMenuAlignment::End, 3))
+            .viewport(400, 400);
+        ui.frame();
+        click(&mut ui, 356.0, 356.0);
+        ui.frames(60);
+        let tree = ui.accessibility_snapshot().unwrap();
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Background"))
+        );
+        let close = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.is_expanded() == Some(true))
+            .expect("expanded close button")
+            .0;
+        assert_eq!(tree.focus, close);
+        ui.press_key(tessera_ui::winit::keyboard::NamedKey::Escape);
+        ui.frames(60);
+        let tree = ui.accessibility_snapshot().unwrap();
+        let open = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.is_expanded() == Some(false))
+            .unwrap()
+            .0;
+        assert_eq!(tree.focus, open);
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Background"))
         );
     }
 
@@ -1059,15 +1078,13 @@ mod tests {
                     .iter()
                     .filter(|(_, node)| node.role() == Role::MenuItem)
                     .count(),
-                3,
-                "menu wrappers must preserve action semantics"
+                if states[0] { 3 } else { 0 },
+                "only the open menu exposes action semantics"
             );
-            let menu = tree
-                .nodes
-                .iter()
-                .find(|(_, node)| node.role() == Role::Menu)
-                .expect("menu semantic group");
-            assert_eq!(menu.1.is_hidden(), !states[0]);
+            assert_eq!(
+                tree.nodes.iter().any(|(_, node)| node.role() == Role::Menu),
+                states[0]
+            );
             states
         }
 

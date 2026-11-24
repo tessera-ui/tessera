@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-use super::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider};
+use super::{MenuAnchor, MenuController, MenuPlacement, menu_anchor, menu_item};
 
 #[derive(Clone, Copy)]
 struct Settings {
@@ -55,14 +55,14 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                 Dp::ZERO,
             )))
             .children(move || {
-                menu_provider()
+                menu_anchor()
                     .anchor_optional(settings.get().anchor)
                     .placement(settings.get().placement)
                     .offset([Dp(12.0), Dp(8.0)])
                     .elevation(Dp::ZERO)
                     .controller(controller)
                     .modifier(Modifier::new().width(Dp(180.0)))
-                    .main_content(|| {
+                    .anchor_content(|| {
                         surface()
                             .style(SurfaceStyle::Filled {
                                 color: Color::WHITE,
@@ -193,13 +193,16 @@ fn check_placement() {
             ),
             _ => unreachable!(),
         }
-        assert!(bounds.x0 >= 48.0 && bounds.x1 <= 900.0 && bounds.y0 >= 36.0 && bounds.y1 <= 900.0);
+        assert!(bounds.x0 >= 0.0 && bounds.x1 <= 900.0 && bounds.y0 >= 0.0 && bounds.y1 <= 900.0);
     }
-    renderer.resize(318, 900);
+    renderer.resize(270, 900);
     renderer.frames(4);
     let fitted = panel(&renderer);
-    assert_eq!(fitted.x0, 48.0, "exact-fit viewport clamps to its origin");
-    assert_eq!(fitted.x1, 318.0);
+    assert_eq!(
+        fitted.x0, 0.0,
+        "exact-fit viewport clamps to the window origin"
+    );
+    assert_eq!(fitted.x1, 270.0);
     renderer.resize(900, 900);
     settings.set(Settings {
         anchor: None,

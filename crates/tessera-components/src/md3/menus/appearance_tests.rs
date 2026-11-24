@@ -12,8 +12,8 @@ use crate::md3::{
 };
 
 use super::{
-    MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group, menu_item,
-    menu_provider,
+    MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_anchor, menu_group,
+    menu_item,
 };
 
 #[derive(Clone, Copy)]
@@ -65,12 +65,12 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
             theme
         })
         .child(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
                 .grouped(true)
                 .color_style(settings.get().style)
                 .modifier(Modifier::new().width(Dp(settings.get().width)))
-                .main_content(|| {
+                .anchor_content(|| {
                     surface()
                         .style(SurfaceStyle::Filled {
                             color: Color::WHITE,

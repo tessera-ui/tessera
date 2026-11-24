@@ -153,7 +153,7 @@ fn corners(top: f64, bottom: f64) -> Shape {
 /// ```
 /// use tessera_components::md3::{
 ///     button::button,
-///     menus::{MenuController, menu_group, menu_item, menu_provider},
+///     menus::{MenuController, menu_anchor, menu_group, menu_item},
 ///     text::text,
 ///     theme::material_theme,
 /// };
@@ -164,10 +164,10 @@ fn corners(top: f64, bottom: f64) -> Shape {
 ///     let menu = remember(MenuController::new);
 ///     let status = remember(|| String::from("Document"));
 ///     material_theme().child(move || {
-///         menu_provider()
+///         menu_anchor()
 ///             .controller(menu)
 ///             .grouped(true)
-///             .main_content(move || {
+///             .anchor_content(move || {
 ///                 button()
 ///                     .on_click(move || menu.with_mut(MenuController::open))
 ///                     .child(move || text(status.get()));

@@ -1,7 +1,10 @@
 use tessera_components::{
     boxed::boxed,
     column::column,
-    md3::{dialog::DialogController, theme::material_theme},
+    md3::{
+        dialog::{DialogController, dialog},
+        theme::material_theme,
+    },
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
@@ -41,18 +44,14 @@ fn modal_example_fixture(
     let input = remember(|| true);
     output.set(Some((source, open)));
     material_theme().child(move || {
-        tessera_components::md3::dialog::dialog_provider()
+        column().children(move || {
+            super::example(source, "Input", open, input, true, draft);
+        });
+        dialog(move || open.with_mut(DialogController::close))
             .controller(open)
             .padding(Dp::ZERO)
-            .on_close_request(move || open.with_mut(DialogController::close))
-            .main_content(move || {
-                column().children(move || {
-                    super::example(source, "Input", open, input, true, draft);
-                });
-            })
-            .dialog_content(move |dialog_scope| {
+            .content(move || {
                 super::themed_picker(draft, "Modal")
-                    .dialog(dialog_scope)
                     .modal(open)
                     .commit_target(source);
             });

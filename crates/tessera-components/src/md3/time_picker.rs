@@ -1402,11 +1402,10 @@ fn clock_value(
 ///
 /// ## Usage
 ///
-/// Use inside `dialog_provider` when presenting a modal time selection flow.
+/// Use as the content of [`dialog`](crate::md3::dialog::dialog) for modal time selection.
 ///
 /// ## Parameters
 ///
-/// - `dialog` — registration scope received from the provider content slot.
 /// - `controller` — state handle used by the embedded time picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
@@ -1443,7 +1442,6 @@ fn clock_value(
 /// ```
 #[tessera]
 pub fn time_picker_dialog(
-    dialog: Option<crate::md3::dialog::DialogScope>,
     controller: Option<State<TimePickerController>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
@@ -1458,13 +1456,6 @@ pub fn time_picker_dialog(
     picker_minute_step: Option<u8>,
     picker_layout: Option<TimePickerLayout>,
 ) {
-    crate::md3::dialog::register_dialog_accessibility()
-        .dialog_optional(dialog)
-        .label(
-            title
-                .clone()
-                .unwrap_or_else(|| I18N.text("md3-select-time")),
-        );
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let picker_modifier = picker_modifier.unwrap_or_default();
     let picker_initial_hour = picker_initial_hour.unwrap_or(0);

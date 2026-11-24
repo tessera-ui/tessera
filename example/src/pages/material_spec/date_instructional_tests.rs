@@ -714,7 +714,7 @@ fn assert_article_modal(
                         .map(|label| (label, node.role(), node.bounds()))
                 })
                 .collect::<Vec<_>>();
-            panic!("actual hosted dialog missing for {screenshot}; published={published:?}");
+            panic!("date popup missing for {screenshot}; published={published:?}");
         });
     let mut descendants = vec![*dialog_id];
     let mut focused_inside = false;
@@ -838,6 +838,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
         ),
     ] {
         click_article_target(&mut renderer, section, Some(Role::Link));
+        renderer.settle();
         if editor == "Entry methods date" {
             probe_article_editor_pointer_and_queued_commits(&mut renderer);
         }

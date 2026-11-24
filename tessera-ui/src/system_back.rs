@@ -43,8 +43,12 @@ pub enum SystemBackEvent {
 )]
 enum BackCallback {
     Handler(CallbackWith<SystemBackEvent>),
-    /// Popup dismissal only reacts to committed navigation.
-    Dismiss(crate::Callback),
+    /// Popup dismissal reacts only to committed navigation; every phase
+    /// reaches the optional preview first.
+    Dismiss {
+        dismiss: crate::Callback,
+        preview: Option<CallbackWith<SystemBackEvent>>,
+    },
 }
 
 impl BackCallback {
@@ -52,9 +56,12 @@ impl BackCallback {
     fn call(self, event: SystemBackEvent) {
         match self {
             Self::Handler(callback) => callback.call(event),
-            Self::Dismiss(callback) => {
+            Self::Dismiss { dismiss, preview } => {
+                if let Some(preview) = preview {
+                    preview.call(event);
+                }
                 if event == SystemBackEvent::Committed {
-                    callback.call();
+                    dismiss.call();
                 }
             }
         }
@@ -161,8 +168,12 @@ impl DismissRegistration {
         Self(Registration::new())
     }
 
-    pub(crate) fn set(&self, callback: Option<crate::Callback>) {
-        self.0.set(callback.map(BackCallback::Dismiss));
+    pub(crate) fn set(
+        &self,
+        callback: Option<(crate::Callback, Option<CallbackWith<SystemBackEvent>>)>,
+    ) {
+        self.0
+            .set(callback.map(|(dismiss, preview)| BackCallback::Dismiss { dismiss, preview }));
     }
 }
 

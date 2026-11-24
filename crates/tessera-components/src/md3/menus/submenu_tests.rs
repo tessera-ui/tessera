@@ -2,8 +2,11 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, Toggled},
-    remember, tessera,
+    remember,
+    system_back::SystemBackEvent,
+    tessera,
     testing::UiTest,
+    winit::keyboard::NamedKey,
 };
 
 use crate::md3::{
@@ -11,7 +14,7 @@ use crate::md3::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_item, menu_provider};
+use super::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_anchor, menu_item};
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
@@ -45,9 +48,9 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
             theme
         })
         .child(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(root)
-                .main_content(move || {
+                .anchor_content(move || {
                     surface()
                         .modifier(Modifier::new().fill_max_size())
                         .child(move || {
@@ -146,6 +149,41 @@ fn open(renderer: &mut UiTest, observed: &tessera_ui::testing::TestProbe<Fixture
     });
     renderer.frames(4);
     click(renderer, "Share");
+}
+
+#[test]
+fn submenu_keyboard_and_back_dismiss_one_level_and_restore_focus() {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(1000, 700)
+        .content(|| fixture(observed.clone()));
+    ui.frame();
+    ui.node("Menu trigger").click();
+    ui.frames(3);
+    assert_focus(&ui, "Share");
+    for key in [Some(NamedKey::ArrowLeft), Some(NamedKey::Escape), None] {
+        ui.press_key(NamedKey::ArrowRight);
+        ui.frames(3);
+        assert_focus(&ui, "Copy link");
+        if let Some(key) = key {
+            ui.press_key(key);
+        } else {
+            ui.dispatch_system_back(SystemBackEvent::Committed);
+        }
+        ui.frames(3);
+        assert_focus(&ui, "Share");
+        assert!(
+            !ui.accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| { node.label() == Some("Copy link") })
+        );
+    }
+    ui.press_key(NamedKey::Escape);
+    ui.frames(3);
+    assert_focus(&ui, "Menu trigger");
+    assert!(!observed.get().root.unwrap().with(MenuController::is_open));
 }
 
 fn check_submenu_chain() {
@@ -340,7 +378,7 @@ fn disclosure_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) 
     let trailing = remember(|| 0_u8);
     observed.with_mut(|handles| handles.trailing = Some(trailing));
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .controller(remember(|| {
                 let mut controller = MenuController::new();
                 controller.open();
@@ -417,7 +455,7 @@ fn checked_branch_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandle
     observed.with_mut(|handles| handles.checked_config = Some(config));
     observed.with_mut(|handles| handles.checked_calls = Some(calls));
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .controller(controller)
             .menu_content(move |menu| {
                 menu_item()

@@ -27,7 +27,7 @@ use crate::{
     boxed::boxed,
     md3::{
         divider::horizontal_divider,
-        menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
+        menus::{MenuAnchor, MenuController, MenuPlacement, menu_anchor, menu_item},
         surface::{SurfaceStyle, surface},
         text::text,
         text_edit_core::DisplayTransform,
@@ -629,12 +629,7 @@ async fn text_field_pointer_detector(
     mut scope: tessera_ui::PointerInputScope,
     controller: State<TextInputController>,
     geometry: State<FieldGeometry>,
-    action_state: State<Option<TextFieldMenuAction>>,
-    menu_policy: TextFieldContextMenu,
-    input_transform: Option<CallbackWith<String, String>>,
-    on_change: CallbackWith<String, String>,
     enabled: bool,
-    read_only: bool,
 ) {
     let mut active_pointer = None;
     loop {
@@ -651,18 +646,6 @@ async fn text_field_pointer_detector(
         });
         if inside {
             event.block_cursor();
-        }
-        if menu_policy.enabled
-            && let Some(action) = action_state.with_mut(|state| state.take())
-        {
-            apply_menu_action(
-                action,
-                controller,
-                on_change,
-                input_transform,
-                enabled,
-                read_only,
-            );
         }
         for change in event.changes.iter().cloned() {
             match change.content {
@@ -1337,13 +1320,11 @@ fn text_field_menu_content(
     scope: Option<crate::md3::menus::MenuScope>,
     controller: Option<State<TextInputController>>,
     menu: Option<TextFieldContextMenu>,
-    action_state: Option<State<Option<TextFieldMenuAction>>>,
+    on_action: CallbackWith<TextFieldMenuAction>,
 ) {
     let scope = scope.expect("text field menu scope");
     let controller = controller.expect("text_field_menu_content requires controller to be set");
     let menu = menu.expect("text_field_menu_content requires menu policy to be set");
-    let action_state =
-        action_state.expect("text_field_menu_content requires action state to be set");
     if !menu.enabled {
         return;
     }
@@ -1356,7 +1337,7 @@ fn text_field_menu_content(
             .label(I18N.text("md3-cut"))
             .enabled(selection_available)
             .on_click(move || {
-                action_state.set(Some(TextFieldMenuAction::Cut));
+                on_action.call(TextFieldMenuAction::Cut);
             });
     }
     if menu.allow_copy {
@@ -1365,7 +1346,7 @@ fn text_field_menu_content(
             .label(I18N.text("md3-copy"))
             .enabled(selection_available)
             .on_click(move || {
-                action_state.set(Some(TextFieldMenuAction::Copy));
+                on_action.call(TextFieldMenuAction::Copy);
             });
     }
     if menu.allow_paste {
@@ -1374,7 +1355,7 @@ fn text_field_menu_content(
             .label(I18N.text("md3-paste"))
             .enabled(true)
             .on_click(move || {
-                action_state.set(Some(TextFieldMenuAction::Paste));
+                on_action.call(TextFieldMenuAction::Paste);
             });
     }
     if menu.allow_select_all {
@@ -1383,7 +1364,7 @@ fn text_field_menu_content(
             .label(I18N.text("md3-select-all"))
             .enabled(true)
             .on_click(move || {
-                action_state.set(Some(TextFieldMenuAction::SelectAll));
+                on_action.call(TextFieldMenuAction::SelectAll);
             });
     }
 }
@@ -1597,7 +1578,6 @@ pub fn text_field(
     let enabled = args.enabled;
     let read_only = args.read_only;
     let menu_controller = remember(MenuController::new);
-    let action_state = remember(|| None::<TextFieldMenuAction>);
     let input_transform = merge_input_transforms(args.line_limit, args.input_transform);
     let display_transform = if let Some(mask) = args.obfuscation_char {
         Some(CallbackWith::new(move |value: String| {
@@ -1664,29 +1644,9 @@ pub fn text_field(
     } else {
         modifier_base
     };
-    let modifier = modifier_base.pointer_input(
-        (
-            controller,
-            menu_policy,
-            input_transform,
-            on_change,
-            enabled,
-            read_only,
-        ),
-        move |scope| {
-            text_field_pointer_detector(
-                scope,
-                controller,
-                geometry,
-                action_state,
-                menu_policy,
-                input_transform,
-                on_change,
-                enabled,
-                read_only,
-            )
-        },
-    );
+    let modifier = modifier_base.pointer_input((controller, enabled), move |scope| {
+        text_field_pointer_detector(scope, controller, geometry, enabled)
+    });
 
     layout(TextFieldLayout)
         .modifier(modifier.then(field_modifier))
@@ -1694,12 +1654,12 @@ pub fn text_field(
             if menu_policy.enabled {
                 let render_args = render_args.clone();
                 let editor_args = editor_args.clone();
-                menu_provider()
+                menu_anchor()
                     .placement(MenuPlacement::BelowStart)
                     .offset([Dp(0.0), Dp(4.0)])
                     .close_on_focus_loss(true)
                     .controller(menu_controller)
-                    .main_content(move || {
+                    .anchor_content(move || {
                         text_field_content()
                             .args(render_args.clone())
                             .controller(controller)
@@ -1707,11 +1667,19 @@ pub fn text_field(
                             .geometry(geometry);
                     })
                     .menu_content(move |menu| {
-                        text_field_menu_content()
-                            .scope(menu)
-                            .controller(controller)
-                            .menu(menu_policy)
-                            .action_state(action_state);
+                        text_field_menu_content(CallbackWith::new(move |action| {
+                            apply_menu_action(
+                                action,
+                                controller,
+                                on_change,
+                                input_transform,
+                                enabled,
+                                read_only,
+                            );
+                        }))
+                        .scope(menu)
+                        .controller(controller)
+                        .menu(menu_policy);
                     });
             } else {
                 text_field_content()
@@ -1974,6 +1942,112 @@ mod tests {
                         .controller(controller);
                 });
         });
+    }
+
+    #[derive(Clone, Default, PartialEq)]
+    struct PopupMenuProbe {
+        controller: tessera_ui::testing::TestProbe<
+            Option<tessera_ui::State<crate::md3::text_input::TextInputController>>,
+        >,
+        button_clicks: tessera_ui::testing::TestProbe<usize>,
+    }
+
+    #[tessera_ui::tessera]
+    fn context_menu_with_later_button(probe: PopupMenuProbe) {
+        use tessera_foundation::modifier::ModifierExt as _;
+
+        let controller = tessera_ui::remember(|| {
+            let mut controller = crate::md3::text_input::TextInputController::new(
+                tessera_ui::Dp(16.0),
+                Some(tessera_ui::Dp(24.0)),
+            );
+            controller.set_text("Existing text");
+            controller
+        });
+        probe.controller.set(Some(controller));
+        crate::md3::theme::material_theme().child(move || {
+            let clicks = probe.button_clicks.clone();
+            crate::column::column()
+                .modifier(tessera_ui::Modifier::new().fill_max_size())
+                .children(move || {
+                    crate::md3::text_field::text_field()
+                        .modifier(tessera_ui::Modifier::new().width(tessera_ui::Dp(60.0)))
+                        .accessibility_label("Narrow field")
+                        .context_menu(super::TextFieldContextMenu {
+                            enabled: true,
+                            allow_cut: false,
+                            allow_copy: false,
+                            allow_paste: false,
+                            allow_select_all: true,
+                        })
+                        .controller(controller);
+                    crate::md3::button::button()
+                        .modifier(
+                            tessera_ui::Modifier::new()
+                                .fill_max_width()
+                                .height(tessera_ui::Dp(48.0)),
+                        )
+                        .accessibility_label("Later button")
+                        .on_click({
+                            let clicks = clicks.clone();
+                            move || clicks.with_mut(|count| *count += 1)
+                        })
+                        .child(|| crate::md3::text::text("Behind popup"));
+                });
+        });
+    }
+
+    #[test]
+    fn context_menu_escapes_narrow_field_and_hits_above_a_later_button() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let probe = PopupMenuProbe::default();
+        let content = probe.clone();
+        let mut session = UiTest::new()
+            .content(move || context_menu_with_later_button(content.clone()))
+            .viewport(300, 180);
+        session.frame();
+        let field = session.node("Narrow field").bounds();
+        let button = session.node("Later button").bounds();
+        let pointer = PxPosition::from_f32_xy(field.x.to_f32() + 20.0, field.y.to_f32() + 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, pointer, PressKeyEventType::Right);
+        session.frame();
+        session.pointer_release(MOUSE_POINTER_ID, pointer, PressKeyEventType::Right);
+        session.frames(2);
+
+        let tree = session
+            .accessibility_snapshot()
+            .expect("menu accessibility");
+        let item = tree
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::MenuItem)
+            .find_map(|(_, node)| node.bounds())
+            .expect("the right-click opens the Select all item");
+        assert!(
+            item.width() > f64::from(field.width.0),
+            "the menu item is wider than its anchor: {item:?}, {field:?}"
+        );
+        let point = PxPosition::from_f32_xy(
+            ((item.x0 + item.x1) * 0.5) as f32,
+            ((item.y0 + item.y1) * 0.5) as f32,
+        );
+        assert!(
+            button.contains(point) && point.x >= (field.x + field.width).to_f32(),
+            "the menu item overlaps the later button: {item:?}, {button:?}"
+        );
+        let controller = probe.controller.get().expect("text input controller");
+        assert!(!controller.with(|controller| controller.has_selection()));
+        session.click_at(point);
+        session.frames(2);
+        assert_eq!(probe.button_clicks.get(), 0);
+        assert!(
+            controller
+                .with(|controller| controller.selected_text().as_deref() == Some("Existing text")),
+            "the click must activate the menu item, not the button underneath"
+        );
     }
 
     #[test]

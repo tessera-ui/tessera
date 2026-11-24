@@ -1,9 +1,8 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, Color, Constraint, Dp, DrawModifierContent, DrawModifierContext,
-    DrawModifierNode, Modifier, Px, PxPosition, PxSize, State,
-    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    tessera, use_context,
+    DrawModifierNode, Modifier, Px, PxPosition, PxSize, modifier::ModifierCapabilityExt as _,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -12,7 +11,10 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
 };
 
-use super::{SliderColors, SliderLayout, SliderOrientation};
+use super::{
+    SliderColors, SliderLayout, SliderOrientation,
+    indicator::{ValueIndicator, value_indicator},
+};
 
 #[derive(Clone, PartialEq)]
 struct SliderFocusRing {
@@ -90,7 +92,7 @@ pub(super) fn slider_handle(
     layout: Option<SliderLayout>,
     width: Option<tessera_ui::Px>,
     colors: Option<SliderColors>,
-    indicator_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
+    indicator: Option<ValueIndicator>,
     focused: Option<bool>,
 ) {
     let layout = layout.expect("slider_handle requires layout");
@@ -101,11 +103,10 @@ pub(super) fn slider_handle(
         AxisConstraint::exact(layout.handle_height),
     ));
     let modifier = Modifier::new().constrain(Some(constraint.width), Some(constraint.height));
-    let modifier = if let Some(anchor) = indicator_anchor {
-        modifier.on_layout_coordinates(move |rect| {
-            if anchor.get() != rect {
-                anchor.set(rect);
-            }
+    let anchor_visible = remember(|| false);
+    let modifier = if indicator.is_some() {
+        modifier.on_visible_window_bounds(move |bounds: Option<tessera_ui::FloatRect>| {
+            anchor_visible.set_if_changed(bounds.is_some());
         })
     } else {
         modifier
@@ -122,7 +123,15 @@ pub(super) fn slider_handle(
         .modifier(modifier)
         .style(colors.thumb.into())
         .shape(Shape::CAPSULE)
-        .child(|| {});
+        .child(move || {
+            if let Some(indicator) = &indicator {
+                value_indicator(
+                    indicator.clone(),
+                    layout.axis.orientation,
+                    anchor_visible.get(),
+                );
+            }
+        });
 }
 
 #[tessera]

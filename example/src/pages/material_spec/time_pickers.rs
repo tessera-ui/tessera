@@ -5,7 +5,7 @@ use tessera_components::{
     flow_row::flow_row,
     md3::{
         button::button,
-        dialog::{DialogController, dialog_provider},
+        dialog::{DialogController, dialog},
         icon_button::icon_button,
         material_icons::filled,
         surface::surface,
@@ -58,156 +58,154 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
         layout: remember(TimePickerLayout::default),
         status: sample.status,
     };
-    dialog_provider()
-        .controller(modal)
-        .padding(Dp::ZERO)
-        .accessibility_label(I18N.text("ui-time-picker-dialog"))
-        .on_close_request(move || modal.with_mut(DialogController::close))
-        .main_content(move || {
-            article(
-                "ui-time-pickers",
-                "ui-time-pickers-help-people-select-and-set-a-specific-time",
-                vec![
-                    SpecSection {
-                        title: "ui-tokens-specs",
-                        content: RenderSlot::new(tokens),
-                    },
-                    SpecSection {
-                        title: "ui-anatomy",
-                        content: RenderSlot::new(move || {
-                            subheading("ui-time-picker-dial".into());
-                            time_figure(
-                                false,
-                                false,
-                                false,
-                                FigureKind::Specs,
-                                "ui-dial-anatomy".into(),
-                            );
-                            gap(Dp(24.0));
-                            subheading("ui-time-picker-input".into());
-                            time_figure(
-                                true,
-                                false,
-                                false,
-                                FigureKind::Specs,
-                                "ui-input-anatomy".into(),
-                            );
-                            gap(Dp(24.0));
-                            controls(sample, "ui-anatomy");
-                            gap(Dp(24.0));
-                            visual(sample, "ui-anatomy");
-                            gap(Dp(24.0));
-                            button()
-                                .outlined()
-                                .accessibility_label(I18N.text("ui-open-time-picker-dialog"))
-                                .on_click(move || open_picker(modal, draft, committed))
-                                .child(move || {
-                                    text(I18N.text("ui-open-dialog"));
-                                });
-                            confirmed_time(committed);
-                            gap(Dp(24.0));
-                        }),
-                    },
-                    SpecSection {
-                        title: "ui-color",
-                        content: RenderSlot::new(colors),
-                    },
-                    SpecSection {
-                        title: "ui-states",
-                        content: RenderSlot::new(states),
-                    },
-                    SpecSection {
-                        title: "ui-measurements",
-                        content: RenderSlot::new(measurements),
-                    },
-                    SpecSection {
-                        title: "ui-configurations",
-                        content: RenderSlot::new(configurations),
-                    },
-                ],
-            )
-            .route_optional(route.clone())
-            .compact_content_inset(Dp(8.0))
-            .pages(vec![
-                ArticlePage {
-                    title: "ui-overview",
-                    intro: Some(RenderSlot::new(time_variants)),
-                    sections: vec![],
+    {
+        article(
+            "ui-time-pickers",
+            "ui-time-pickers-help-people-select-and-set-a-specific-time",
+            vec![
+                SpecSection {
+                    title: "ui-tokens-specs",
+                    content: RenderSlot::new(tokens),
                 },
-                ArticlePage {
-                    title: "ui-guidelines",
-                    intro: Some(RenderSlot::new(|| {
+                SpecSection {
+                    title: "ui-anatomy",
+                    content: RenderSlot::new(move || {
+                        subheading("ui-time-picker-dial".into());
                         time_figure(
                             false,
                             false,
                             false,
-                            FigureKind::Plain,
-                            "ui-guideline-introduction".into(),
+                            FigureKind::Specs,
+                            "ui-dial-anatomy".into(),
                         );
-                    })),
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-usage",
-                            content: RenderSlot::new(time_usage),
-                        },
-                        SpecSection {
-                            title: "ui-anatomy",
-                            content: RenderSlot::new(time_guideline_anatomy),
-                        },
-                        SpecSection {
-                            title: "ui-placement",
-                            content: RenderSlot::new(move || {
-                                time_placement();
-                                gap(Dp(24.0));
-                                button()
-                                    .outlined()
-                                    .accessibility_label(I18N.text("ui-open-placement-time-picker"))
-                                    .on_click(move || open_picker(modal, draft, committed))
-                                    .child(move || {
-                                        text(I18N.text("ui-open-time-picker"));
-                                    });
-                                confirmed_time(committed);
-                            }),
-                        },
-                        SpecSection {
-                            title: "ui-adaptive-design",
-                            content: RenderSlot::new(time_adaptive),
-                        },
-                        SpecSection {
-                            title: "ui-behavior",
-                            content: RenderSlot::new(move || {
-                                time_behavior(sample, modal, draft, committed);
-                            }),
-                        },
-                    ],
+                        gap(Dp(24.0));
+                        subheading("ui-time-picker-input".into());
+                        time_figure(
+                            true,
+                            false,
+                            false,
+                            FigureKind::Specs,
+                            "ui-input-anatomy".into(),
+                        );
+                        gap(Dp(24.0));
+                        controls(sample, "ui-anatomy");
+                        gap(Dp(24.0));
+                        visual(sample, "ui-anatomy");
+                        gap(Dp(24.0));
+                        button()
+                            .outlined()
+                            .accessibility_label(I18N.text("ui-open-time-picker-dialog"))
+                            .on_click(move || open_picker(modal, draft, committed))
+                            .child(move || {
+                                text(I18N.text("ui-open-dialog"));
+                            });
+                        confirmed_time(committed);
+                        gap(Dp(24.0));
+                    }),
                 },
-                ArticlePage {
-                    title: "ui-accessibility",
-                    intro: None,
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-use-cases",
-                            content: RenderSlot::new(time_accessibility_use_cases),
-                        },
-                        SpecSection {
-                            title: "ui-interaction-style",
-                            content: RenderSlot::new(time_accessibility_interaction),
-                        },
-                        SpecSection {
-                            title: "ui-keyboard-navigation",
-                            content: RenderSlot::new(time_keyboard),
-                        },
-                        SpecSection {
-                            title: "ui-labeling-elements",
-                            content: RenderSlot::new(time_labels),
-                        },
-                    ],
+                SpecSection {
+                    title: "ui-color",
+                    content: RenderSlot::new(colors),
                 },
-            ]);
-        })
-        .dialog_content(move |dialog_scope| {
+                SpecSection {
+                    title: "ui-states",
+                    content: RenderSlot::new(states),
+                },
+                SpecSection {
+                    title: "ui-measurements",
+                    content: RenderSlot::new(measurements),
+                },
+                SpecSection {
+                    title: "ui-configurations",
+                    content: RenderSlot::new(configurations),
+                },
+            ],
+        )
+        .route_optional(route)
+        .compact_content_inset(Dp(8.0))
+        .pages(vec![
+            ArticlePage {
+                title: "ui-overview",
+                intro: Some(RenderSlot::new(time_variants)),
+                sections: vec![],
+            },
+            ArticlePage {
+                title: "ui-guidelines",
+                intro: Some(RenderSlot::new(|| {
+                    time_figure(
+                        false,
+                        false,
+                        false,
+                        FigureKind::Plain,
+                        "ui-guideline-introduction".into(),
+                    );
+                })),
+                sections: vec![
+                    SpecSection {
+                        title: "ui-usage",
+                        content: RenderSlot::new(time_usage),
+                    },
+                    SpecSection {
+                        title: "ui-anatomy",
+                        content: RenderSlot::new(time_guideline_anatomy),
+                    },
+                    SpecSection {
+                        title: "ui-placement",
+                        content: RenderSlot::new(move || {
+                            time_placement();
+                            gap(Dp(24.0));
+                            button()
+                                .outlined()
+                                .accessibility_label(I18N.text("ui-open-placement-time-picker"))
+                                .on_click(move || open_picker(modal, draft, committed))
+                                .child(move || {
+                                    text(I18N.text("ui-open-time-picker"));
+                                });
+                            confirmed_time(committed);
+                        }),
+                    },
+                    SpecSection {
+                        title: "ui-adaptive-design",
+                        content: RenderSlot::new(time_adaptive),
+                    },
+                    SpecSection {
+                        title: "ui-behavior",
+                        content: RenderSlot::new(move || {
+                            time_behavior(sample, modal, draft, committed);
+                        }),
+                    },
+                ],
+            },
+            ArticlePage {
+                title: "ui-accessibility",
+                intro: None,
+                sections: vec![
+                    SpecSection {
+                        title: "ui-use-cases",
+                        content: RenderSlot::new(time_accessibility_use_cases),
+                    },
+                    SpecSection {
+                        title: "ui-interaction-style",
+                        content: RenderSlot::new(time_accessibility_interaction),
+                    },
+                    SpecSection {
+                        title: "ui-keyboard-navigation",
+                        content: RenderSlot::new(time_keyboard),
+                    },
+                    SpecSection {
+                        title: "ui-labeling-elements",
+                        content: RenderSlot::new(time_labels),
+                    },
+                ],
+            },
+        ]);
+    }
+    dialog(move || modal.with_mut(DialogController::close))
+        .controller(modal)
+        .padding(Dp::ZERO)
+        .accessibility_label(I18N.text("ui-time-picker-dialog"))
+        .content(move || {
             picker_surface(draft, "ui-modal")
-                .dialog(dialog_scope)
                 .modal(modal)
                 .committed(committed);
         });
@@ -360,7 +358,6 @@ fn picker_surface(
     #[prop(into)] label: String,
     modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
-    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -383,7 +380,6 @@ fn picker_surface(
                 .modifier(Modifier::new().padding_all(Dp(24.0)))
                 .children(move || {
                     picker_contents(sample, confirm_label.clone(), cancel_label.clone())
-                        .dialog_optional(dialog)
                         .modal_optional(modal)
                         .committed_optional(committed);
                 });
@@ -397,10 +393,8 @@ fn picker_contents(
     #[prop(into)] cancel_label: String,
     modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
-    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     time_picker_dialog()
-        .dialog_optional(dialog)
         .controller(sample.state)
         .title(I18N.text(sample.state.with(|state| {
             if state.display_mode() == TimePickerDisplayMode::Input {

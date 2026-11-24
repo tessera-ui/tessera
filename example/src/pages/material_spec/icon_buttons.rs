@@ -11,7 +11,7 @@ use tessera_components::{
         surface::RipplePresentation,
         text::text,
         theme::{MaterialTheme, material_theme},
-        tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
+        tooltip::tooltip_box,
     },
     modifier::ModifierExt as _,
     shape_def::Shape,
@@ -277,28 +277,22 @@ fn overview_icon(index: usize) {
 
 #[tessera]
 fn hover_preview() {
-    let controller = remember(TooltipController::new);
     let count = remember(|| 0_usize);
     panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                tooltip_provider(I18N.text("ui-add-to-favorites"))
-                    .controller(controller)
-                    .placement(TooltipPlacement::Above)
-                    .child(move |_| {
-                        boxed()
-                            .alignment(Alignment::Center)
-                            .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
-                            .children(move || {
-                                tooltip_anchor(controller).child(move || {
-                                    icon_button()
-                                        .standard()
-                                        .icon(filled::FAVORITE_SVG)
-                                        .accessibility_label(I18N.text("ui-hover-favorite-action"))
-                                        .on_click(move || count.set(count.get() + 1));
-                                });
-                            });
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
+                    .children(move || {
+                        tooltip_box(I18N.text("ui-add-to-favorites")).child(move || {
+                            icon_button()
+                                .standard()
+                                .icon(filled::FAVORITE_SVG)
+                                .accessibility_label(I18N.text("ui-hover-favorite-action"))
+                                .on_click(move || count.set(count.get() + 1));
+                        });
                     });
                 text(I18N.format(
                     "ui-hover-example-actions-value",

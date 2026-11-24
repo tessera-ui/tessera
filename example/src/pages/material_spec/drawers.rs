@@ -12,7 +12,7 @@ use tessera_components::{
         modifier::ModifierExt as _,
         navigation_drawer::{NavigationDrawerStyle, navigation_drawer, navigation_drawer_item},
         scrollable::ScrollableController,
-        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
+        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet},
         surface::{RipplePresentation, surface},
         text::text,
         theme::{MaterialTheme, material_theme},
@@ -228,22 +228,24 @@ pub(crate) fn live_drawer_host(
     if !session.route_active() && open.with(SideSheetController::is_open) {
         open.with_mut(SideSheetController::close);
     }
-    let modal = RenderSlot::new(move || {
-        modal_side_sheet_provider()
-            .max_width(Dp(360.0))
-            .content_padding(Dp::ZERO)
-            .position(SideSheetPosition::Start)
-            .controller(open)
-            .accessibility_label(I18N.text("ui-mail-navigation"))
-            .on_close_request(move || open.with_mut(SideSheetController::close))
-            .main_content(move || {
-                main_content.render(session);
-            })
-            .side_sheet_content(move || {
-                live_drawer(selected, open, scroll);
-            });
-    });
-    modal.render();
+    main_content.render(session);
+    mail_drawer(open, selected, scroll);
+}
+
+#[tessera]
+fn mail_drawer(
+    open: State<SideSheetController>,
+    selected: State<usize>,
+    scroll: State<ScrollableController>,
+) {
+    modal_side_sheet(open)
+        .max_width(Dp(360.0))
+        .content_padding(Dp::ZERO)
+        .position(SideSheetPosition::Start)
+        .accessibility_label(I18N.text("ui-mail-navigation"))
+        .side_sheet_content(move || {
+            live_drawer(selected, open, scroll);
+        });
 }
 
 #[tessera]
@@ -406,20 +408,9 @@ pub(super) fn drawers_spec(
             },
         ]);
     });
-    if root.is_some() {
-        content.render();
-    } else {
-        modal_side_sheet_provider()
-            .max_width(Dp(360.0))
-            .content_padding(Dp::ZERO)
-            .position(SideSheetPosition::Start)
-            .controller(open)
-            .accessibility_label(I18N.text("ui-mail-navigation"))
-            .on_close_request(move || open.with_mut(SideSheetController::close))
-            .main_content_shared(content)
-            .side_sheet_content(move || {
-                live_drawer(selected, open, scroll);
-            });
+    content.render();
+    if root.is_none() {
+        mail_drawer(open, selected, scroll);
     }
 }
 

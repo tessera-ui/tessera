@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    MenuAnchor, MenuController, MenuDefaults, MenuPosition, menu_group, menu_item, menu_provider,
+    MenuAnchor, MenuController, MenuDefaults, MenuPosition, menu_anchor, menu_group, menu_item,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -78,12 +78,12 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                     }
                 });
         } else {
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
                 .grouped(grouped.get())
                 .max_height(Dp(160.0).into())
                 .modifier(Modifier::new().width(Dp(240.0)))
-                .main_content(|| {
+                .anchor_content(|| {
                     surface()
                         .style(SurfaceStyle::Filled {
                             color: Color::WHITE,

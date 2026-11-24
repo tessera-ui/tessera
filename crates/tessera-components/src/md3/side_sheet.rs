@@ -1,4 +1,4 @@
-//! Side sheet provider - slide supporting content in from the screen edge.
+//! Side sheets present supporting content from a window edge.
 //!
 //! ## Usage
 //!
@@ -6,34 +6,34 @@
 
 mod input;
 
-use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
-    RenderSlot, State, launch,
+    Callback, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, FocusRestorationTarget,
+    FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    PxSize, RenderSlot, State, focus, launch,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
+    popup::{WindowOrigin, popup},
     remember,
     system_back::SystemBackEvent,
     tessera,
     time::Instant,
-    use_context, winit,
+    use_context,
 };
 
 use crate::{
     animation::{
         Motion, run_frames,
         sheet_drag::SheetDrag,
-        visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
+        visibility_motion::{VisibilityMotion, VisibilitySample},
     },
-    md3::{surface::surface, theme::MaterialTheme},
-    modal_focus::{ModalFocusState, modal_focus_modifier},
+    md3::{modal_scrim::modal_scrim, surface::surface, theme::MaterialTheme},
     modifier::with_keyboard_input,
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
     },
-    overlay_semantics::{dialog_semantics, overlay_background},
+    overlay_semantics::dialog_semantics,
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -69,7 +69,7 @@ pub enum SideSheetPosition {
     End,
 }
 
-/// Controller for side sheet providers, managing open/closed state.
+/// Controller for side sheets, managing open/closed state.
 #[derive(Clone, PartialEq)]
 pub struct SideSheetController {
     is_open: bool,
@@ -225,30 +225,6 @@ fn compute_side_sheet_x(
     x + drag_offset
 }
 
-fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>)> {
-    Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
-        let mut handled = false;
-        input.keyboard_events.retain(|event| {
-            if event.state != winit::event::ElementState::Pressed {
-                return true;
-            }
-
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                event.physical_key
-            {
-                on_close.call();
-                handled = true;
-                return false;
-            }
-
-            true
-        });
-        if handled {
-            input.block_keyboard();
-        }
-    })
-}
-
 fn is_close_direction(delta_x: f32, position: SideSheetPosition) -> bool {
     match position {
         SideSheetPosition::Start => delta_x < 0.0,
@@ -337,11 +313,9 @@ fn place_side_sheet_if_present(
     drag_offset: f32,
 ) {
     let children = input.children();
-    if children.len() <= 2 {
+    let Some(&side_sheet) = children.get(1) else {
         return;
-    }
-
-    let side_sheet = children[2];
+    };
     let parent_width = host_size.width;
     let parent_height = host_size.height;
 
@@ -370,7 +344,7 @@ fn place_side_sheet_if_present(
     result.place_child(side_sheet, PxPosition::from_f32_xy(x, 0.0));
 }
 
-/// # modal_side_sheet_provider
+/// # modal_side_sheet
 ///
 /// Show a modal side sheet that blocks interaction with the main content.
 ///
@@ -381,14 +355,15 @@ fn place_side_sheet_if_present(
 /// ## Parameters
 ///
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
-/// - `on_close_request` — optional close-request callback.
+/// - `on_close_request` — called on a scrim tap, unhandled Escape, system back,
+///   or a dismissing drag. Defaults to closing the controller.
 /// - `position` — side sheet edge position.
-/// - `max_width` — maximum surface width, constrained by the host; defaults to
+/// - `max_width` — maximum surface width, constrained by the window; defaults to
 ///   400dp.
 /// - `content_padding` — inset inside the surface; defaults to 24dp. Negative
 ///   dimensions become zero; non-finite dimensions use their defaults.
-/// - `controller` — optional external controller.
-/// - `main_content` — optional main content rendered behind the sheet.
+/// - `controller` — controls visibility. Keep the component mounted when
+///   closing so its exit animation can finish.
 /// - `side_sheet_content` — optional side sheet content.
 ///
 /// ## Examples
@@ -398,46 +373,43 @@ fn place_side_sheet_if_present(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::{side_sheet::{SideSheetController, modal_side_sheet_provider}, text::text};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, modal_side_sheet}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         modal_side_sheet_provider()
+///         let controller = remember(|| SideSheetController::new(true));
+///         modal_side_sheet(controller)
 ///             .accessibility_label("Filters")
-///             .controller(remember(|| SideSheetController::new(true)))
 ///             .max_width(tessera_ui::Dp(360.0))
 ///             .content_padding(tessera_ui::Dp::ZERO)
-///             .main_content(|| text("Main content"))
 ///             .side_sheet_content(|| text("Filter options"));
 ///     });
 /// # }
 /// ```
 #[tessera]
-pub fn modal_side_sheet_provider(
+pub fn modal_side_sheet(
+    controller: State<SideSheetController>,
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
     max_width: Option<Dp>,
     content_padding: Option<Dp>,
-    controller: Option<State<SideSheetController>>,
-    main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
-    let position = position.unwrap_or_default();
-    side_sheet_provider_inner()
+    let on_close_request = on_close_request
+        .unwrap_or_else(|| Callback::new(move || controller.with_mut(SideSheetController::close)));
+    side_sheet_container(controller)
         .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Modal)
-        .on_close_request_optional(on_close_request)
-        .position(position)
+        .on_close_request_shared(on_close_request)
+        .position_optional(position)
         .max_width_optional(max_width)
         .content_padding_optional(content_padding)
-        .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
-        .controller_optional(controller);
+        .side_sheet_content_optional(side_sheet_content);
 }
 
-/// # standard_side_sheet_provider
+/// # standard_side_sheet
 ///
 /// Show a standard side sheet that keeps the main content interactive.
 ///
@@ -462,21 +434,22 @@ pub fn modal_side_sheet_provider(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::{side_sheet::{SideSheetController, standard_side_sheet_provider}, text::text};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, standard_side_sheet}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         standard_side_sheet_provider()
+///         let controller = remember(|| SideSheetController::new(true));
+///         standard_side_sheet()
 ///             .accessibility_label("Details")
-///             .controller(remember(|| SideSheetController::new(true)))
+///             .controller(controller)
 ///             .main_content(|| text("Main content"))
 ///             .side_sheet_content(|| text("Details"));
 ///     });
 /// # }
 /// ```
 #[tessera]
-pub fn standard_side_sheet_provider(
+pub fn standard_side_sheet(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
@@ -484,69 +457,28 @@ pub fn standard_side_sheet_provider(
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
-    let position = position.unwrap_or_default();
-    side_sheet_provider_inner()
-        .accessibility_label_optional(accessibility_label)
-        .sheet_type(SideSheetType::Standard)
-        .on_close_request_shared(on_close_request.unwrap_or_default())
-        .position(position)
-        .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
-        .controller_optional(controller);
-}
-
-#[tessera]
-fn side_sheet_provider_inner(
-    accessibility_label: Option<String>,
-    max_width: Option<Dp>,
-    content_padding: Option<Dp>,
-    sheet_type: Option<SideSheetType>,
-    on_close_request: Option<Callback>,
-    position: Option<SideSheetPosition>,
-    controller: Option<State<SideSheetController>>,
-    main_content: Option<RenderSlot>,
-    side_sheet_content: Option<RenderSlot>,
-) {
-    let max_width = side_sheet_dimension(max_width, MAX_SHEET_WIDTH);
-    let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
-    let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
-    let position = position.unwrap_or_default();
-    let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
-    let external_controller = controller;
-    let controller = match external_controller {
-        Some(value) => value,
+    let controller = match controller {
+        Some(controller) => controller,
         None => remember(|| SideSheetController::new(false)),
     };
-    let on_close_request = if let Some(on_close_request) = on_close_request {
-        on_close_request
-    } else if external_controller.is_some() && sheet_type == SideSheetType::Modal {
-        Callback::new(move || controller.with_mut(SideSheetController::close))
-    } else {
-        Callback::default()
-    };
-
-    side_sheet_provider_render()
+    side_sheet_container(controller)
         .accessibility_label_optional(accessibility_label)
-        .max_width(max_width)
-        .content_padding(content_padding)
-        .sheet_type(sheet_type)
-        .on_close_request_shared(on_close_request)
-        .position(position)
-        .controller(controller)
-        .main_content_shared(main_content)
-        .side_sheet_content_shared(side_sheet_content);
+        .sheet_type(SideSheetType::Standard)
+        .on_close_request_optional(on_close_request)
+        .position_optional(position)
+        .main_content_optional(main_content)
+        .side_sheet_content_optional(side_sheet_content);
 }
 
 #[tessera]
-fn side_sheet_provider_render(
+fn side_sheet_container(
+    controller: State<SideSheetController>,
     accessibility_label: Option<String>,
     max_width: Option<Dp>,
     content_padding: Option<Dp>,
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
-    controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
@@ -555,7 +487,6 @@ fn side_sheet_provider_render(
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let position = position.unwrap_or_default();
     let on_close_request = on_close_request.unwrap_or_default();
-    let controller = controller.expect("side_sheet_provider_render requires controller");
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
 
@@ -563,7 +494,12 @@ fn side_sheet_provider_render(
     if current_position.get() != position {
         current_position.set(position);
     }
-    let parent_nested_scroll = NestedScrollConnection::nearest();
+    let is_modal = sheet_type == SideSheetType::Modal;
+    let parent_nested_scroll = if is_modal {
+        None
+    } else {
+        NestedScrollConnection::nearest()
+    };
     let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
         controller,
@@ -572,14 +508,8 @@ fn side_sheet_provider_render(
         parent_nested_scroll,
     )
     .with_coordinate_scale(coordinate_scale);
-    let (is_open, visibility, drag_offset) = controller.get().snapshot();
-    let is_animating = controller.get().is_animating();
-    let side_sheet_open_state = remember(|| false);
-    let mut just_opened = false;
-    side_sheet_open_state.with_mut(|was_open| {
-        just_opened = !*was_open && is_open;
-        *was_open = is_open;
-    });
+    let (is_open, visibility, drag_offset) = controller.with(SideSheetController::snapshot);
+    let is_animating = controller.with(SideSheetController::is_animating);
     if is_animating {
         launch(
             controller.with(|c| c.requests),
@@ -593,9 +523,35 @@ fn side_sheet_provider_render(
     } else {
         drag_offset
     };
-    let focus_scope = remember(FocusScopeNode::new).get();
-    let focus_state = remember(ModalFocusState::default);
-    let modifier = modal_focus_modifier(Modifier::new(), focus_state, show_side_sheet, focus_scope);
+    let mut modifier =
+        Modifier::new().on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+            if coordinate_scale.get() != transform.scale() {
+                coordinate_scale.set(transform.scale());
+            }
+        });
+    let focus_scope = if is_modal {
+        None
+    } else {
+        let scope = remember(FocusScopeNode::new).get();
+        let focus = remember(StandardSheetFocus::default);
+        modifier = standard_sheet_focus(modifier, focus, show_side_sheet, scope);
+        Some(scope)
+    };
+    if is_modal && !show_side_sheet {
+        return;
+    }
+    let scrim = if is_modal {
+        Some(
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .scrim
+                .with_alpha(visibility.opacity * SCRIM_ALPHA),
+        )
+    } else {
+        None
+    };
 
     let progress = if is_open {
         visibility.position
@@ -603,87 +559,97 @@ fn side_sheet_provider_render(
         1.0 - visibility.position
     };
 
-    tessera_ui::layout::layout(SideSheetLayout {
-        max_width,
-        progress,
-        is_open,
-        position,
-        drag_offset,
-    })
-    .modifier(
-        modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
-            if coordinate_scale.get() != transform.scale() {
-                coordinate_scale.set(transform.scale());
+    let layer = RenderSlot::new(move || {
+        let nested_scroll_connection = nested_scroll_connection.clone();
+        let accessibility_label = accessibility_label.clone();
+        layout(SideSheetLayout {
+            max_width,
+            progress,
+            is_open,
+            position,
+            drag_offset,
+        })
+        .modifier(modifier.clone())
+        .child(move || {
+            if let Some(scrim) = scrim {
+                modal_scrim(scrim).on_dismiss_optional(is_open.then_some(on_close_request));
+            } else {
+                side_sheet_main_content(main_content);
             }
-        }),
-    )
-    .child(move || {
-        let side_sheet_content = side_sheet_content;
-        overlay_background(
-            main_content,
-            show_side_sheet && sheet_type == SideSheetType::Modal,
-        );
-        modal_back_handler(
-            is_open && sheet_type == SideSheetType::Modal,
-            on_close_request,
-        )
-        .on_preview(move |event| {
-            controller.with_mut(|controller| controller.preview_back(event));
+            if show_side_sheet {
+                side_sheet_content_wrapper()
+                    .content_padding(content_padding)
+                    .nested_scroll_connection(nested_scroll_connection.clone())
+                    .accessibility_label_optional(accessibility_label.clone())
+                    .focus_scope_optional(focus_scope)
+                    .sheet_type(sheet_type)
+                    .position(current_position)
+                    .controller(controller)
+                    .on_close_request_shared(on_close_request)
+                    .content_shared(side_sheet_content);
+            }
         });
-
-        if show_side_sheet {
-            match sheet_type {
-                SideSheetType::Modal => {
-                    let scrim_alpha = visibility.opacity * SCRIM_ALPHA;
-                    let scrim_color = use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .color_scheme
-                        .scrim;
-                    surface()
-                        .style(scrim_color.with_alpha(scrim_alpha).into())
-                        .on_click_shared(on_close_request)
-                        .show_ripple(false)
-                        .show_state_layer(false)
-                        .modifier(
-                            Modifier::new()
-                                .fill_max_size()
-                                .semantics(SemanticsArgs {
-                                    hidden: true,
-                                    ..Default::default()
-                                })
-                                .focusable()
-                                .focus_properties(
-                                    FocusProperties::new()
-                                        .can_focus(false)
-                                        .can_request_focus(false)
-                                        .skip_traversal(true),
-                                ),
-                        )
-                        .block_input(true)
-                        .child(|| {});
-                }
-                SideSheetType::Standard => {
-                    surface()
-                        .style(Color::TRANSPARENT.into())
-                        .modifier(Modifier::new().fill_max_size())
-                        .child(|| {});
-                }
-            }
-
-            side_sheet_content_wrapper()
-                .content_padding(content_padding)
-                .nested_scroll_connection(nested_scroll_connection.clone())
-                .accessibility_label_optional(accessibility_label.clone())
-                .focus_scope(focus_scope)
-                .sheet_type(sheet_type)
-                .position(current_position)
-                .controller(controller)
-                .on_close_request_shared(on_close_request)
-                .just_opened(just_opened)
-                .content_shared(side_sheet_content);
-        }
     });
+    if is_modal {
+        popup(WindowOrigin)
+            .modal(true)
+            .dismiss_on_outside_press(false)
+            .dismiss_on_escape(is_open)
+            .dismiss_on_back(is_open)
+            .on_back_preview(move |event| {
+                controller.with_mut(|controller| controller.preview_back(event));
+            })
+            .on_dismiss_request(on_close_request)
+            .child(layer);
+    } else {
+        layer.render();
+    }
+}
+
+#[derive(Default)]
+struct StandardSheetFocus {
+    visible: bool,
+    origin: Option<FocusRestorationTarget>,
+    pending: Option<FocusRestorationTarget>,
+}
+
+fn standard_sheet_focus(
+    modifier: Modifier,
+    state: State<StandardSheetFocus>,
+    visible: bool,
+    scope: FocusScopeNode,
+) -> Modifier {
+    if visible != state.with(|state| state.visible) {
+        focus::defer_keyboard_until_layout();
+        if visible {
+            state.set(StandardSheetFocus {
+                visible,
+                origin: focus::save_focus(),
+                pending: None,
+            });
+            scope.restore_focus();
+        } else {
+            let restore = scope.has_focus();
+            state.with_mut(|state| {
+                state.visible = false;
+                state.pending = state.origin.take().filter(|_| restore);
+            });
+        }
+    }
+    if state.with(|state| state.pending.is_some()) {
+        modifier.on_globally_positioned(move |_| {
+            if let Some(target) = state.with_mut(|state| state.pending.take()) {
+                target.restore();
+            }
+        })
+    } else {
+        modifier
+    }
+}
+
+#[tessera]
+fn side_sheet_main_content(content: RenderSlot) {
+    layout(Stack).child(content);
 }
 
 #[tessera]
@@ -696,13 +662,11 @@ fn side_sheet_content_wrapper(
     position: Option<State<SideSheetPosition>>,
     controller: Option<State<SideSheetController>>,
     on_close_request: Option<Callback>,
-    just_opened: Option<bool>,
     content: Option<RenderSlot>,
 ) {
     let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let position = position.expect("sheet wrapper requires its edge state");
-    let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("side_sheet_content_wrapper requires controller");
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("side_sheet_content_wrapper requires content");
@@ -717,67 +681,64 @@ fn side_sheet_content_wrapper(
         SideSheetType::Standard => scheme.surface,
     };
     let is_modal = sheet_type == SideSheetType::Modal;
-    let on_close_request_for_keyboard = on_close_request;
-
-    let focus_scope = focus_scope.expect("side sheet content requires its focus scope");
-    let modifier = dialog_semantics(
-        with_keyboard_input(
-            Modifier::new()
-                .focus_scope(Some(focus_scope))
-                .focus_properties(FocusProperties::new().skip_traversal(true))
-                .focus_traversal_policy(
-                    FocusTraversalPolicy::linear()
-                        .wrap(is_modal)
-                        .tab_navigation(true),
-                ),
-            make_keyboard_closure(on_close_request_for_keyboard),
-        ),
-        accessibility_label,
-        is_modal,
-    );
-    if just_opened {
-        if is_modal {
-            focus_scope.request_focus();
-        } else {
-            focus_scope.restore_focus();
-        }
+    let scope = if let Some(scope) = focus_scope {
+        scope
+    } else {
+        remember(FocusScopeNode::new).get()
+    };
+    let mut modifier = Modifier::new()
+        .focus_scope(Some(scope))
+        .focus_properties(FocusProperties::new().skip_traversal(true))
+        .focus_traversal_policy(
+            FocusTraversalPolicy::linear()
+                .wrap(is_modal)
+                .tab_navigation(true),
+        );
+    if !is_modal {
+        modifier = with_keyboard_input(
+            modifier,
+            Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
+                let mut handled = false;
+                input.keyboard_events.retain(|event| {
+                    if event.state == tessera_ui::winit::event::ElementState::Pressed
+                        && event.physical_key
+                            == tessera_ui::winit::keyboard::PhysicalKey::Code(
+                                tessera_ui::winit::keyboard::KeyCode::Escape,
+                            )
+                    {
+                        on_close_request.call();
+                        handled = true;
+                        false
+                    } else {
+                        true
+                    }
+                });
+                if handled {
+                    input.block_keyboard();
+                }
+            }),
+        );
     }
+    let modifier = dialog_semantics(modifier, accessibility_label, is_modal);
     layout(Stack).modifier(modifier).child(move || {
         let content = content;
         let nested_scroll_connection = nested_scroll_connection.clone();
         let edge = position.get();
-        if is_modal {
-            surface()
-                .elevation(MODAL_ELEVATION)
-                .style(container_color.into())
-                .shape(sheet_shape(edge))
-                .modifier(side_sheet_extent_modifier(controller))
-                .block_input(true)
-                .child(move || {
-                    side_sheet_body()
-                        .content_padding(content_padding)
-                        .controller(controller)
-                        .position(position)
-                        .on_close_shared(on_close_request)
-                        .content_shared(content)
-                        .nested_scroll_connection(nested_scroll_connection.clone());
-                });
-        } else {
-            surface()
-                .style(container_color.into())
-                .shape(sheet_shape(edge))
-                .modifier(side_sheet_extent_modifier(controller))
-                .block_input(true)
-                .child(move || {
-                    side_sheet_body()
-                        .content_padding(content_padding)
-                        .controller(controller)
-                        .position(position)
-                        .on_close_shared(on_close_request)
-                        .content_shared(content)
-                        .nested_scroll_connection(nested_scroll_connection.clone());
-                });
-        }
+        surface()
+            .elevation(if is_modal { MODAL_ELEVATION } else { Dp::ZERO })
+            .style(container_color.into())
+            .shape(sheet_shape(edge))
+            .modifier(side_sheet_extent_modifier(controller))
+            .block_input(true)
+            .child(move || {
+                side_sheet_body()
+                    .content_padding(content_padding)
+                    .controller(controller)
+                    .position(position)
+                    .on_close_shared(on_close_request)
+                    .content_shared(content)
+                    .nested_scroll_connection(nested_scroll_connection.clone());
+            });
     });
 }
 
@@ -804,10 +765,7 @@ impl tessera_ui::LayoutPolicy for SideSheetLayout {
         let main_content = children.first()?;
         let mut result = LayoutResult::new(input.size());
         result.place_child(*main_content, PxPosition::ZERO);
-        if let Some(scrim) = children.get(1) {
-            result.place_child(*scrim, PxPosition::ZERO);
-        }
-        if let Some(sheet) = children.get(2) {
+        if let Some(sheet) = children.get(1) {
             let parent_width = input.size().width;
             let x = compute_side_sheet_x(
                 parent_width,
@@ -839,12 +797,6 @@ impl tessera_ui::LayoutPolicy for SideSheetLayout {
                 .clamp(main_content_size.height),
         );
         result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
-
-        if children.len() > 1 {
-            let scrim = children[1];
-            scrim.measure(input, &Constraint::exact(host_size.width, host_size.height))?;
-            result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
-        }
 
         place_side_sheet_if_present(
             input,

@@ -4,12 +4,7 @@
 //!
 //! Preserve position and velocity while surfaces open, close and reverse.
 
-use tessera_ui::{
-    Callback, CallbackWith,
-    system_back::{SystemBackEvent, system_back_handler},
-    tessera,
-    time::Instant,
-};
+use tessera_ui::{system_back::SystemBackEvent, time::Instant};
 
 use super::{
     Motion,
@@ -112,22 +107,6 @@ impl Motion for VisibilityMotion {
         self.opacity.advance(now);
         self.sample().active
     }
-}
-
-#[tessera]
-pub(crate) fn modal_back_handler(
-    enabled: bool,
-    on_close: Callback,
-    on_preview: Option<CallbackWith<SystemBackEvent>>,
-) {
-    system_back_handler(enabled).on_back(move |event| {
-        if let Some(preview) = on_preview {
-            preview.call(event);
-        }
-        if event == SystemBackEvent::Committed {
-            on_close.call();
-        }
-    });
 }
 
 #[cfg(test)]

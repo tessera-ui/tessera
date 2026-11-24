@@ -1,8 +1,3 @@
-//!
-//! ## Usage
-//!
-//! Keep modal and standard supporting panels usable inside scrolling content.
-
 use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
@@ -23,9 +18,7 @@ use crate::{
     },
 };
 
-use super::{
-    SideSheetController, SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider,
-};
+use super::{SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet};
 
 #[derive(Clone, Default)]
 struct FixtureOutput {
@@ -73,14 +66,13 @@ fn fixture(
                     });
                 });
                 if modal {
-                    modal_side_sheet_provider()
-                        .controller(open)
+                    main.render();
+                    modal_side_sheet(open)
                         .position(position)
                         .on_close_request(move || open.with_mut(SideSheetController::close))
-                        .main_content_shared(main)
                         .side_sheet_content_shared(sheet);
                 } else {
-                    standard_side_sheet_provider()
+                    standard_side_sheet()
                         .controller(open)
                         .position(position)
                         .on_close_request(move || open.with_mut(SideSheetController::close))
@@ -108,13 +100,19 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                         let snapshot = session.advance(Duration::from_millis(1_000));
                         snapshot.node("host").size(width, 480);
                         let sheet = snapshot.node("sheet").bounds();
-                        assert_eq!(sheet.width.0, width.min(400) - 48);
+                        let expected_sheet_width = if modal { 352 } else { width.min(400) - 48 };
+                        assert_eq!(sheet.width.0, expected_sheet_width);
                         assert_eq!(
-                            sheet.height.0, 432,
-                            "sheet height must come from its measured host"
+                            sheet.height.0,
+                            if modal { 552 } else { 432 },
+                            "modal sheets use window bounds; standard sheets use their host"
                         );
                         let expected_x = if position == SideSheetPosition::End {
-                            (width - 400).max(0) + 24
+                            if modal {
+                                424
+                            } else {
+                                (width - 400).max(0) + 24
+                            }
                         } else {
                             24
                         };
@@ -143,7 +141,7 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                                     .open
                                     .expect("mounted sheet visibility")
                                     .with(SideSheetController::is_open),
-                                "the full measured host must have a dismissible scrim"
+                                "the area outside the sheet must have a dismissible scrim"
                             );
                         }
                     }
@@ -200,17 +198,17 @@ fn configured_fixture(
             .modifier(Modifier::new().fill_max_size())
             .children(move || {
                 boxed()
-                    .modifier(tag("configured-host").size(Dp(f64::from(width)), Dp(480.0)))
+                    .modifier(
+                        tag("configured-host")
+                            .size(Dp(f64::from(width)), Dp(480.0))
+                            .clip_to_bounds(),
+                    )
                     .children(move || {
-                        modal_side_sheet_provider()
-                            .controller(open)
+                        modal_side_sheet(open)
                             .position(SideSheetPosition::Start)
                             .max_width(dimensions.with(|value| value.0))
                             .content_padding(dimensions.with(|value| value.1))
                             .on_close_request(move || open.with_mut(SideSheetController::close))
-                            .main_content(|| {
-                                boxed().modifier(Modifier::new().fill_max_size());
-                            })
                             .side_sheet_content(|| {
                                 column()
                                     .modifier(
@@ -245,20 +243,20 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                 initial.node("configured-host").size(width, 480);
                 initial
                     .node("configured-sheet")
-                    .size(width.min(360), 480)
+                    .size(360, 600)
                     .position(0, 0);
                 initial
                     .node("configured-destination")
-                    .size(width.min(360) - 24, 56)
+                    .size(336, 56)
                     .position(12, 12);
                 let dimensions = output.get().dimensions.expect("mounted sheet dimensions");
                 dimensions.with_mut(|value| value.0 = Dp(300.0));
                 let resized = session.frames(1);
-                resized.node("configured-sheet").size(300, 480);
+                resized.node("configured-sheet").size(300, 600);
                 resized.node("configured-destination").size(276, 56);
                 dimensions.with_mut(|value| value.1 = Dp(16.0));
                 let padded = session.frames(1);
-                padded.node("configured-sheet").rect(16, 16, 268, 448);
+                padded.node("configured-sheet").rect(16, 16, 268, 568);
                 padded.node("configured-destination").rect(28, 28, 244, 56);
                 if width == 600 {
                     dimensions.set((Dp(360.0), Dp::ZERO));
@@ -303,11 +301,11 @@ fn configured_modal_dimensions_keep_nonfinite_and_negative_inputs_out_of_constra
             for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
                 dimensions.set((Dp(value), Dp(value)));
                 let snapshot = session.frames(1);
-                snapshot.node("configured-sheet").rect(24, 24, 352, 432);
+                snapshot.node("configured-sheet").rect(24, 24, 352, 552);
             }
             dimensions.set((Dp(360.0), Dp(-16.0)));
             let snapshot = session.frames(1);
-            snapshot.node("configured-sheet").rect(0, 0, 360, 480);
+            snapshot.node("configured-sheet").rect(0, 0, 360, 600);
         },
     );
 }
