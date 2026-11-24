@@ -43,9 +43,9 @@ tessera-platform = { path = "crates/tessera-platform", version = "0.1.1" }
 tessera-shard = { path = "crates/tessera-shard", version = "1.0.1" }
 tessera-ui = { path = "tessera-ui", version = "4.0.0" }
 accesskit = { path = "crates/tessera-accesskit/accesskit", version = "0.25.2" }
-accesskit_winit = { package = "tessera-accesskit-winit", path = "crates/tessera-accesskit/adapters/winit", version = "0.34.2" }
+accesskit_winit = { package = "tessera-accesskit-winit", path = "crates/tessera-accesskit/adapters/winit", version = "0.34.3" }
 glyphon = { package = "tessera-glyphon", path = "crates/tessera-glyphon", version = "0.12.0" }
-winit = { package = "tessera-winit", path = "crates/tessera-winit", version = "0.30.13" }
+winit = { package = "tessera-winit", path = "crates/tessera-winit", version = "0.31" }
 
 anyhow = "1.0.98"
 arboard = "3.7"
