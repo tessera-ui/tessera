@@ -1,6 +1,7 @@
 ## [v1.1.0] - 2026-11-24
 
 - Generate mobile projects with native platform-view support. The component checker recognizes `popup` as a node-emitting API alongside `layout` and `group`.
+- Keep piped stdin open until the dev server's cancelled child process exits.
 
 [v1.1.0]: https://github.com/tessera-ui/tessera/compare/cargo-tessera-v1.0.0...cargo-tessera-v1.1.0
 
