@@ -275,10 +275,9 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
 
                 // Cancel an in-flight build so we only build once per stable
                 // tree.
-                if let Some(mut active_build) = build_child.take() {
+                if let Some(active_build) = build_child.take() {
                     reporter.status("Canceling", "in-progress build due to changes");
-                    let _ = active_build.kill();
-                    let _ = active_build.wait();
+                    drop(active_build);
                 }
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
@@ -303,10 +302,7 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
             }
 
             // Kill previous process
-            if let Some(mut c) = child.take() {
-                let _ = c.kill();
-                let _ = c.wait();
-            }
+            drop(child.take());
 
             reporter.status("Building", "project");
 
@@ -418,14 +414,8 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
     }
 
     // Cleanup
-    if let Some(mut build) = build_child {
-        let _ = build.kill();
-        let _ = build.wait();
-    }
-    if let Some(mut c) = child {
-        let _ = c.kill();
-        let _ = c.wait();
-    }
+    drop(build_child);
+    drop(child);
 
     stop.store(true, Ordering::Relaxed);
     Ok(())
@@ -471,8 +461,9 @@ impl DerefMut for ManagedChild {
 
 impl Drop for ManagedChild {
     fn drop(&mut self) {
-        if !matches!(self.child.try_wait(), Ok(Some(_))) {
-            let _ = self.child.kill();
+        if !matches!(self.child.try_wait(), Ok(Some(_))) && self.child.kill().is_ok() {
+            // wait() closes piped stdin before reaping. Keep it open until the child exits.
+            let _stdin = self.child.stdin.take();
             let _ = self.child.wait();
         }
         self.readers.clear();

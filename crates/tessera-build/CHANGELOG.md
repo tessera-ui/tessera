@@ -1,3 +1,9 @@
+## [v1.0.1] - 2026-11-24
+
+- Reduce the size of the application icon source stored during asset generation.
+
+[v1.0.1]: https://github.com/tessera-ui/tessera/compare/tessera-build-v1.0.0...tessera-build-v1.0.1
+
 ## [v1.0.0] - 2026-11-16
 
 ### Breaking changes

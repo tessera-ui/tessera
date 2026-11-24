@@ -1,3 +1,10 @@
+## [v4.0.0] - 2026-11-24
+
+- **Breaking:** MD3 overlays use core popup layers. Replace overlay providers with `menu_anchor`, `tooltip_box`, `dialog`, `bottom_sheet`, `modal_side_sheet`, or `standard_side_sheet`. Dialog bodies no longer take `DialogScope`; modal navigation rails take visibility at entry, slider indicators need no host, and FAB menus no longer wrap page content.
+- Text-field context menus draw and receive input above siblings. Text fields forward modifiers to their row and wrap to their preferred width.
+
+[v4.0.0]: https://github.com/tessera-ui/tessera/compare/tessera-components-v3.0.0...tessera-components-v4.0.0
+
 ## [v3.0.0] - 2026-11-16
 
 ### Breaking changes

@@ -26,16 +26,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "accesskit_android"
-version = "0.9.1"
-dependencies = [
- "accesskit",
- "accesskit_consumer",
- "jni 0.21.1",
- "log",
-]
-
-[[package]]
 name = "accesskit_atspi_common"
 version = "0.21.1"
 dependencies = [
@@ -53,18 +43,6 @@ version = "0.39.2"
 dependencies = [
  "accesskit",
  "hashbrown 0.17.1",
-]
-
-[[package]]
-name = "accesskit_ios"
-version = "0.2.2"
-dependencies = [
- "accesskit",
- "accesskit_consumer",
- "hashbrown 0.17.1",
- "objc2 0.5.3",
- "objc2-foundation 0.2.2",
- "objc2-ui-kit 0.2.2",
 ]
 
 [[package]]
@@ -824,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-tessera"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aho-corasick",
  "annotate-snippets",
@@ -7228,22 +7206,44 @@ dependencies = [
 ]
 
 [[package]]
-name = "tessera-accesskit-winit"
-version = "0.34.2"
+name = "tessera-accesskit-android"
+version = "0.9.2"
 dependencies = [
  "accesskit",
- "accesskit_android",
- "accesskit_ios",
+ "accesskit_consumer",
+ "jni 0.21.1",
+ "log",
+]
+
+[[package]]
+name = "tessera-accesskit-ios"
+version = "0.2.3"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "hashbrown 0.17.1",
+ "objc2 0.5.3",
+ "objc2-foundation 0.2.2",
+ "objc2-ui-kit 0.2.2",
+]
+
+[[package]]
+name = "tessera-accesskit-winit"
+version = "0.34.3"
+dependencies = [
+ "accesskit",
  "accesskit_macos",
  "accesskit_unix",
  "accesskit_windows",
  "raw-window-handle",
+ "tessera-accesskit-android",
+ "tessera-accesskit-ios",
  "tessera-winit",
 ]
 
 [[package]]
 name = "tessera-android-activity"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "android-properties",
  "bitflags 2.13.2",
@@ -7261,7 +7261,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-build"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -7282,7 +7282,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-components"
-version = "3.0.0"
+version = "4.0.0"
 dependencies = [
  "bytemuck",
  "encase",
@@ -7346,7 +7346,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-foundation"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "tessera-ui",
 ]
@@ -7368,7 +7368,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-i18n"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fluent-bundle",
  "fluent-templates",
@@ -7377,7 +7377,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-macros"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -7387,7 +7387,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-mobile"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "colored",
  "core-foundation 0.10.1",
@@ -7425,7 +7425,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-platform"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "objc2 0.6.5",
@@ -7440,7 +7440,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-shard"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "parking_lot 0.13.0",
  "tessera-macros",
@@ -7449,7 +7449,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui"
-version = "3.0.0"
+version = "4.0.0"
 dependencies = [
  "accesskit",
  "bumpalo",
@@ -7508,7 +7508,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-winit"
-version = "0.30.13"
+version = "0.31.0"
 dependencies = [
  "ahash",
  "atomic-waker",

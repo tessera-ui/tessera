@@ -1,3 +1,9 @@
+## [v1.0.1] - 2026-11-24
+
+- Build router components against Tessera 4.
+
+[v1.0.1]: https://github.com/tessera-ui/tessera/compare/tessera-shard-v1.0.0...tessera-shard-v1.0.1
+
 ## [v1.0.0] - 2026-11-16
 
 ### Breaking changes

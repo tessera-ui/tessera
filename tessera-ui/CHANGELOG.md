@@ -1,3 +1,11 @@
+## [v4.0.0] - 2026-11-24
+
+- Embed native controls with `platform_view` on desktop, mobile, and web. Desktop hosts route input and compose native views in scene order; AppKit now shows mounted views correctly.
+- Use `popup` for anchored layers with dismissal, focus handling, and Android predictive back. Pointer input no longer steals focus from a descendant that handled the press.
+- **Breaking:** `render::Command` now includes a native platform-view boundary. Update exhaustive matches to handle the new variant; it is not a draw or compute command.
+
+[v4.0.0]: https://github.com/tessera-ui/tessera/compare/tessera-ui-v3.0.0...tessera-ui-v4.0.0
+
 ## [v3.0.0] - 2026-11-16
 
 Tessera 3 introduces typed component props, reactive state, and modifiers for

@@ -1,3 +1,9 @@
+## [v1.0.1] - 2026-11-24
+
+- Generated builders avoid redundant struct updates and use `Option::replace` when setting pending props.
+
+[v1.0.1]: https://github.com/tessera-ui/tessera/compare/tessera-macros-v1.0.0...tessera-macros-v1.0.1
+
 ## [v1.0.0] - 2026-11-16
 
 ### Breaking changes

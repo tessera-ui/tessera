@@ -34,18 +34,18 @@ homepage = "https://tessera-ui.github.io"
 #   then opt into the features they use.
 [workspace.dependencies]
 bumpalo = "3.20"
-tessera-build = { path = "crates/tessera-build", version = "1.0.0" }
-tessera-components = { path = "crates/tessera-components", version = "3.0.0" }
-tessera-foundation = { path = "crates/tessera-foundation", version = "0.1.0" }
-tessera-i18n = { path = "crates/tessera-i18n", version = "0.1.0" }
-tessera-macros = { path = "crates/tessera-macros", version = "1.0.0" }
-tessera-platform = { path = "crates/tessera-platform", version = "0.1.0" }
-tessera-shard = { path = "crates/tessera-shard", version = "1.0.0" }
-tessera-ui = { path = "tessera-ui", version = "3.0.0" }
+tessera-build = { path = "crates/tessera-build", version = "1.0.1" }
+tessera-components = { path = "crates/tessera-components", version = "4.0.0" }
+tessera-foundation = { path = "crates/tessera-foundation", version = "0.1.1" }
+tessera-i18n = { path = "crates/tessera-i18n", version = "0.1.1" }
+tessera-macros = { path = "crates/tessera-macros", version = "1.0.1" }
+tessera-platform = { path = "crates/tessera-platform", version = "0.1.1" }
+tessera-shard = { path = "crates/tessera-shard", version = "1.0.1" }
+tessera-ui = { path = "tessera-ui", version = "4.0.0" }
 accesskit = { path = "crates/tessera-accesskit/accesskit", version = "0.25.2" }
-accesskit_winit = { package = "tessera-accesskit-winit", path = "crates/tessera-accesskit/adapters/winit", version = "0.34.2" }
+accesskit_winit = { package = "tessera-accesskit-winit", path = "crates/tessera-accesskit/adapters/winit", version = "0.34.3" }
 glyphon = { package = "tessera-glyphon", path = "crates/tessera-glyphon", version = "0.12.0" }
-winit = { package = "tessera-winit", path = "crates/tessera-winit", version = "0.30.13" }
+winit = { package = "tessera-winit", path = "crates/tessera-winit", version = "0.31.0" }
 
 anyhow = "1.0.98"
 arboard = "3.7"
