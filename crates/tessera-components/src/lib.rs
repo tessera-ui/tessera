@@ -61,6 +61,7 @@ pub mod image_vector;
 mod layout_flex;
 mod lazy_shared;
 pub mod md3;
+#[cfg(test)]
 mod modal_focus;
 pub mod modifier;
 mod nested_scroll;

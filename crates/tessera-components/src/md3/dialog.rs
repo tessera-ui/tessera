@@ -309,7 +309,11 @@ pub fn dialog(
     controller: Option<State<DialogController>>,
     content: Option<RenderSlot>,
 ) {
-    let controller = controller.unwrap_or_else(|| remember(|| DialogController::new(true)));
+    let controller = if let Some(controller) = controller {
+        controller
+    } else {
+        remember(|| DialogController::new(true))
+    };
     let full_screen = full_screen.unwrap_or(false);
     let padding = padding.unwrap_or(if full_screen { Dp::ZERO } else { Dp(24.0) });
     let (is_open, visibility) = controller.with(DialogController::snapshot);

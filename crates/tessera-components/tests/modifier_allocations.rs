@@ -120,10 +120,10 @@ fn two_action_construction_allocates_nodes_but_clones_do_not() {
 #[test]
 fn remembered_state_mutations_do_not_allocate_after_initialization() {
     let state = Rc::new(Cell::new(None));
-    let mut session = tessera_ui::testing::UiTest::new().content({
+    let mut session = {
         let state = state.clone();
-        move || remember_allocation_probe(state.clone())
-    });
+        tessera_ui::testing::UiTest::new().content(move || remember_allocation_probe(state.clone()))
+    };
     session.frame();
     let state = state.get().expect("component initialized remembered state");
 
