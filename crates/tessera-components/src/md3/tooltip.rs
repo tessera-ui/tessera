@@ -791,13 +791,30 @@ fn tooltip_popup(
                 actions.clone(),
             );
             tooltip_margin(move || {
-                let panel = tooltip_panel(message.clone(), controller)
-                    .modifier_optional(modifier.clone())
+                let modifier = modifier
+                    .clone()
+                    .unwrap_or_default()
+                    .focus_group(Some(controller.with(|controller| controller.popup_group)))
+                    .focus_requester(controller.with(|controller| controller.popup_focus))
+                    .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, true))
+                    .push_keyboard_input(TooltipRestoreInput { controller })
+                    .push_pointer_final_input(TooltipRestoreInput { controller })
+                    .push_pointer_preview_input(TooltipPointer {
+                        controller,
+                        popup: true,
+                    });
+                let panel = tooltip_panel(message.clone())
+                    .modifier(modifier)
                     .variant_optional(variant)
                     .headline_optional(headline.clone())
                     .action_label_optional(action_label.clone());
-                if let Some(on_action) = on_action {
-                    panel.on_action_shared(on_action);
+                if action_label.is_some() {
+                    panel.on_action(move || {
+                        controller.with_mut(TooltipController::dismiss);
+                        if let Some(on_action) = on_action {
+                            on_action.call();
+                        }
+                    });
                 }
                 if let Some(actions) = &actions {
                     panel.actions_shared(actions.clone());
@@ -811,13 +828,14 @@ fn tooltip_margin(content: RenderSlot) {
     layout(WindowMargin).child(content);
 }
 
+/// Displays a tooltip surface inline. Use [`tooltip_box`] to attach it to a
+/// trigger with hover, focus, long-press, and popup placement behavior.
 #[tessera]
-fn tooltip_panel(
-    message: String,
-    controller: State<TooltipController>,
+pub fn tooltip_panel(
+    #[prop(into)] message: String,
     variant: Option<TooltipVariant>,
-    headline: Option<String>,
-    action_label: Option<String>,
+    #[prop(into)] headline: Option<String>,
+    #[prop(into)] action_label: Option<String>,
     on_action: Option<Callback>,
     actions: Option<RenderSlot>,
     modifier: Option<Modifier>,
@@ -848,15 +866,6 @@ fn tooltip_panel(
     let modifier = modifier
         .unwrap_or_default()
         .size_in(Some(Dp(40.0)), Some(max_width), Some(Dp(24.0)), None)
-        .focus_group(Some(controller.with(|controller| controller.popup_group)))
-        .focus_requester(controller.with(|controller| controller.popup_focus))
-        .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, true))
-        .push_keyboard_input(TooltipRestoreInput { controller })
-        .push_pointer_final_input(TooltipRestoreInput { controller })
-        .push_pointer_preview_input(TooltipPointer {
-            controller,
-            popup: true,
-        })
         .semantics(SemanticsArgs {
             role: Some(if rich && (action_label.is_some() || has_actions) {
                 Role::Dialog
@@ -936,12 +945,7 @@ fn tooltip_panel(
                         button()
                             .text()
                             .accessibility_label(action_label.clone().unwrap_or_default())
-                            .on_click(move || {
-                                controller.with_mut(TooltipController::dismiss);
-                                if let Some(on_action) = on_action {
-                                    on_action.call();
-                                }
-                            })
+                            .on_click_optional(on_action)
                             .child(move || {
                                 let label = render_data.with(|(_, _, _, label, _, _, _)| {
                                     label.clone().unwrap_or_default()

@@ -12,7 +12,9 @@ use tessera_components::{
         surface::surface,
         text::text,
         theme::{MaterialTheme, TextStyle, material_theme},
-        tooltip::{TooltipController, TooltipPlacement, TooltipVariant, tooltip_box},
+        tooltip::{
+            TooltipController, TooltipPlacement, TooltipVariant, tooltip_box, tooltip_panel,
+        },
     },
     modifier::ModifierExt as _,
     row::row,
@@ -2009,34 +2011,16 @@ fn tooltip_configuration_canvas() {
 
 #[tessera]
 fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y: Dp) {
-    let controller = remember(|| {
-        let mut controller = TooltipController::new();
-        controller.show();
-        controller
-    });
-    let geometry = remember(SpaceGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let popup_height = geometry
-        .with(|values| {
-            values
-                .get("popup")
-                .map(|rect| Dp::from_pixels_f32(rect.height).0)
-        })
-        .unwrap_or(if actions == 0 {
-            112.0
-        } else if headline {
-            156.0
-        } else {
-            132.0
-        });
-    boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
-        role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),merge_descendants:true,..Default::default()
+    column().modifier(Modifier::new().offset(x,Dp(y.0-48.0)).semantics(SemanticsArgs {
+        role: Some(Role::Group),label: Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", number.into())])),merge_descendants:true,..Default::default()
     })).children(move || {
-        boxed()
-            .modifier(Modifier::new().required_size(Dp(328.0), Dp(popup_height + 56.0)))
-            .children(move || {
-            let tooltip = tooltip_box(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
-                .controller(controller)
+            boxed().alignment(Alignment::Center)
+                .modifier(Modifier::new().size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
+                .children(move || {text(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface);});
+            gap(Dp(24.0));
+            let tooltip = tooltip_panel(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
+                .modifier(Modifier::new().width(Dp(312.0)))
                 .variant(TooltipVariant::Rich);
             if headline {
                 tooltip.headline(I18N.text("ui-rich-tooltip"));
@@ -2052,26 +2036,6 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                     });
                 });
             }
-            tooltip
-                .placement(TooltipPlacement::Below)
-                .persistent(actions > 0)
-                .popup_modifier(watch_in_space(geometry, "popup").width(Dp(312.0)))
-                .modifier(Modifier::new().offset(Dp(8.0), Dp(8.0)).size(Dp(312.0), Dp(36.0)))
-                                .child(move || {
-                                    boxed()
-                                        .modifier(Modifier::new().size(Dp(312.0), Dp(36.0)))
-                                        .children(move || {
-                                            boxed().alignment(Alignment::Center)
-                                                .modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0))
-                                                    .border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
-                                                .children(move || {
-                                                    text((number).to_string())
-                                                        .style(type_style(14.0, 20.0))
-                                                        .color(scheme.on_surface);
-                                                });
-                                        });
-                                });
-            });
     });
 }
 
@@ -2215,18 +2179,6 @@ fn tooltip_reference_popup(
     } else {
         "popup"
     };
-    let controller = remember(|| {
-        let mut controller = TooltipController::new();
-        controller.show();
-        controller
-    });
-    let popup_height = geometry
-        .with(|values| {
-            values
-                .get(name)
-                .map(|rect| Dp::from_pixels_f32(rect.height).0)
-        })
-        .unwrap_or(if rich { 156.0 } else { 24.0 });
     let modifier = watch_in_space(geometry, name);
     let modifier = if rich {
         modifier.width(Dp(312.0))
@@ -2234,18 +2186,14 @@ fn tooltip_reference_popup(
         modifier
     };
     boxed()
-        .modifier(Modifier::new().required_size(Dp(width), Dp(height)))
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(Dp(center_x - width * 0.5), Dp(center_y - height * 0.5))
+                .required_size(Dp(width), Dp(height)),
+        )
         .children(move || {
-            let tooltip = tooltip_box(I18N.text(message.clone()))
-                .controller(controller)
-                .popup_modifier(modifier.clone())
-                .modifier(
-                    Modifier::new()
-                        .offset(Dp(center_x - 0.5), Dp(center_y + popup_height * 0.5 + 4.0)),
-                )
-                .child(|| {
-                    spacer().modifier(Modifier::new().size(Dp(1.0), Dp(1.0)));
-                });
+            let tooltip = tooltip_panel(I18N.text(message.clone())).modifier(modifier.clone());
             if rich {
                 tooltip
                     .variant(TooltipVariant::Rich)
