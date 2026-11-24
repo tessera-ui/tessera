@@ -965,6 +965,7 @@ mod tests {
                 dismiss_on_escape: true,
                 dismiss_on_back: true,
                 on_dismiss_request: None,
+                on_back_preview: None,
                 sequence,
             }));
             node

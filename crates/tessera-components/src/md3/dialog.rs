@@ -16,7 +16,9 @@ use tessera_ui::{
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     popup::{WindowOrigin, popup},
-    provide_context, remember, tessera,
+    provide_context, remember,
+    system_back::SystemBackEvent,
+    tessera,
     time::Instant,
     use_context,
 };
@@ -107,6 +109,11 @@ impl DialogController {
 
     fn advance(&mut self, now: Instant) -> bool {
         self.motion.advance(now)
+    }
+
+    fn preview_back(&mut self, event: SystemBackEvent) {
+        self.motion.preview_back(event);
+        self.requests = self.requests.wrapping_add(1);
     }
 
     fn is_animating(&self) -> bool {
@@ -336,6 +343,10 @@ pub fn dialog(
     });
     popup(WindowOrigin)
         .modal(true)
+        .dismiss_on_back(is_open)
+        .on_back_preview(move |event| {
+            controller.with_mut(|controller| controller.preview_back(event));
+        })
         .on_dismiss_request(dismiss)
         .child(move || {
             let accessibility_label = accessibility_label.clone();

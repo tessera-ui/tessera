@@ -347,6 +347,14 @@ fn app_paints_safe_areas_and_applies_live_insets_once() {
     let mut renderer = crate::run()
         .into_headless(HeadlessConfig::default())
         .expect("example GPU session");
+    // The directory starts open, and its modal sheet covers the app bar.
+    renderer.render_frames(1);
+    let scrim = tessera_ui::PxPosition::new(tessera_ui::Px(790), tessera_ui::Px(300));
+    let button = tessera_ui::PressKeyEventType::Left;
+    renderer.pointer_press(tessera_ui::MOUSE_POINTER_ID, scrim, button);
+    renderer.render_frames(1);
+    renderer.pointer_release(tessera_ui::MOUSE_POINTER_ID, scrim, button);
+    renderer.render_frames(1);
     for (width, height, insets) in [
         (800, 600, Insets::top(Dp(28.0))),
         (400, 800, Insets::vertical(Dp(24.0))),

@@ -4,7 +4,7 @@
 //!
 //! Preserve position and velocity while surfaces open, close and reverse.
 
-use tessera_ui::time::Instant;
+use tessera_ui::{system_back::SystemBackEvent, time::Instant};
 
 use super::{
     Motion,
@@ -16,6 +16,7 @@ pub(crate) struct VisibilityMotion {
     position: Scalar,
     opacity: Scalar,
     spatial: bool,
+    back_start: Option<(f32, f32)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +33,7 @@ impl VisibilityMotion {
             position: Scalar::new(value),
             opacity: Scalar::new(value),
             spatial,
+            back_start: None,
         }
     }
 
@@ -45,9 +47,35 @@ impl VisibilityMotion {
 
     /// Retargets the motion at the next [`Motion::advance`].
     pub fn request(&mut self, open: bool) {
+        self.back_start = None;
         let target = f64::from(open);
         self.position.request_retarget(target, self.spec());
         self.opacity.request_retarget(target, Spec::Effects);
+    }
+
+    /// Follows a predictive back gesture; a finished gesture requests the open
+    /// state again.
+    pub fn preview_back(&mut self, event: SystemBackEvent) {
+        match event {
+            SystemBackEvent::Started(_) => {
+                let start = self.sample();
+                self.position.snap(f64::from(start.position));
+                self.opacity.snap(f64::from(start.opacity));
+                self.back_start = Some((start.position, start.opacity));
+            }
+            SystemBackEvent::Progress { progress, .. } => {
+                if let Some((position, opacity)) = self.back_start {
+                    let visible = 1.0 - progress;
+                    self.position.snap(f64::from(position * visible));
+                    self.opacity.snap(f64::from(opacity * visible));
+                }
+            }
+            SystemBackEvent::Cancelled | SystemBackEvent::Committed => {
+                if self.back_start.is_some() {
+                    self.request(true);
+                }
+            }
+        }
     }
 
     pub fn sample(&self) -> VisibilitySample {
@@ -68,6 +96,7 @@ impl Motion for VisibilityMotion {
     }
 
     fn retarget(&mut self, open: bool, now: Instant) {
+        self.back_start = None;
         let target = f64::from(open);
         self.position.retarget(target, self.spec(), now);
         self.opacity.retarget(target, Spec::Effects, now);

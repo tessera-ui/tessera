@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Dp, Modifier, PxPosition, RenderSlot, State, remember, system_back::SystemBackEvent, tessera,
+    Dp, Modifier, PxPosition, RenderSlot, State, remember,
+    system_back::{BackSwipeEdge, SystemBackEvent},
+    tessera,
     testing::UiTest,
 };
 
@@ -150,12 +152,33 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
 }
 
 #[test]
-fn modal_sheet_closes_on_committed_system_back() {
+fn modal_sheet_previews_back_without_closing_until_commit() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut session =
         UiTest::new().content(|| fixture((true, SideSheetPosition::Start, 600), output.clone()));
-    session.frame();
+    let initial = session.frame().node("sheet").bounds();
     let open = output.get().open.expect("mounted sheet");
+    session.dispatch_system_back(SystemBackEvent::Started(BackSwipeEdge::Left));
+    session.dispatch_system_back(SystemBackEvent::Progress {
+        progress: 0.5,
+        edge: BackSwipeEdge::Left,
+    });
+    let preview = session
+        .advance(Duration::from_millis(16))
+        .node("sheet")
+        .bounds();
+    assert!(preview.x < initial.x);
+    assert_eq!(preview.width, initial.width);
+    assert!(session.run(|| open.with(SideSheetController::is_open)));
+
+    session.dispatch_system_back(SystemBackEvent::Cancelled);
+    session.advance(Duration::from_millis(16));
+    session.advance(Duration::from_millis(16));
+    let restored = session
+        .advance(Duration::from_millis(952))
+        .node("sheet")
+        .bounds();
+    assert_eq!(restored, initial);
     session.dispatch_system_back(SystemBackEvent::Committed);
     assert!(!session.run(|| open.with(SideSheetController::is_open)));
 }

@@ -774,8 +774,14 @@ fn corner_tooltips_fit_the_window_and_keep_the_trigger_gap() {
                     panic!("width {width}: no popup next to {alignment} trigger {trigger:?}")
                 });
             let popup = popups.swap_remove(index);
-            assert!(popup.x0 >= 8.0 && popup.x1 <= f64::from(width) - 8.0);
-            assert!(popup.y0 >= 8.0 && popup.y1 <= 992.0);
+            assert!(
+                popup.x0 >= 8.0 && popup.x1 <= f64::from(width) - 8.0,
+                "width {width}: {alignment} popup {popup:?}"
+            );
+            assert!(
+                popup.y0 >= 8.0 && popup.y1 <= 992.0,
+                "width {width}: {alignment} popup {popup:?}"
+            );
         }
     }
 }

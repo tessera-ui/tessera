@@ -18,7 +18,9 @@ use tessera_ui::{
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     popup::{WindowOrigin, popup},
-    remember, remember_with_key, tessera,
+    remember, remember_with_key,
+    system_back::SystemBackEvent,
+    tessera,
     time::Instant,
     use_context,
 };
@@ -162,6 +164,11 @@ impl BottomSheetController {
         self.drag.advance(now);
         self.resize.advance(now);
         self.is_animating()
+    }
+
+    fn preview_back(&mut self, event: SystemBackEvent) {
+        self.motion.preview_back(event);
+        self.requests = self.requests.wrapping_add(1);
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample, f32, f64) {
@@ -716,6 +723,9 @@ pub fn bottom_sheet(
             .dismiss_on_outside_press(false)
             .dismiss_on_escape(is_open)
             .dismiss_on_back(is_open)
+            .on_back_preview(move |event| {
+                controller.with_mut(|controller| controller.preview_back(event));
+            })
             .on_dismiss_request(on_close_request)
             .child(move || {
                 let accessibility_label = accessibility_label.clone();

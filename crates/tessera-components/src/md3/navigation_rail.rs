@@ -13,7 +13,7 @@ use tessera_ui::{
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
     RenderSlot, State,
     accesskit::Role,
-    launch,
+    launch, launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     popup::{WindowOrigin, popup},
@@ -24,7 +24,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    animation::{self, Motion, SelectionAnimation, animate_to},
+    animation::{
+        self, Motion, SelectionAnimation, animate_to, run_frames,
+        visibility_motion::VisibilityMotion,
+    },
     column::column,
     md3::{
         badge::BadgeDefaults,
@@ -894,8 +897,18 @@ pub fn modal_navigation_rail(
     header: Option<RenderSlot>,
     content: Option<tessera_ui::RenderSlotWith<NavigationRailScope>>,
 ) {
+    let was_open = remember(|| false);
+    let back_motion = remember(|| VisibilityMotion::new(true, true));
+    if was_open.get() != is_open {
+        was_open.set(is_open);
+        back_motion.set(VisibilityMotion::new(true, true));
+    }
     if !is_open {
         return;
+    }
+    let back = back_motion.with(VisibilityMotion::sample);
+    if back.active {
+        launch_once(run_frames(back_motion, VisibilityMotion::advance));
     }
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -904,14 +917,24 @@ pub fn modal_navigation_rail(
     popup(WindowOrigin)
         .modal(true)
         .dismiss_on_outside_press(false)
+        .on_back_preview(move |event| {
+            back_motion.with_mut(|motion| motion.preview_back(event));
+        })
         .on_dismiss_request(on_close_request.unwrap_or_default())
         .child(move || {
-            modal_scrim(scheme.scrim.with_alpha(0.32)).on_dismiss_optional(on_close_request);
+            modal_scrim(scheme.scrim.with_alpha(0.32 * back.opacity))
+                .on_dismiss_optional(on_close_request);
             let modifier = dialog_semantics(Modifier::new(), accessibility_label.clone(), true);
             let header = header.clone();
             let content = content.clone();
             surface()
-                .modifier(modifier.width(EXPANDED_MIN_WIDTH).fill_max_height())
+                .modifier(
+                    modifier
+                        .width(EXPANDED_MIN_WIDTH)
+                        .fill_max_height()
+                        .offset(Dp(-48.0 * f64::from(1.0 - back.position)), Dp::ZERO)
+                        .alpha(back.opacity),
+                )
                 .style(scheme.surface_container_low.into())
                 .elevation(Dp(1.0))
                 .shape(Shape::RoundedRectangle {

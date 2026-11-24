@@ -8,12 +8,13 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
-    Callback, Dp, FloatRect, FocusDirection, FocusGroupNode, FocusRequester, FocusState,
-    KeyboardInput, KeyboardInputModifierNode, MOUSE_POINTER_ID, Modifier, PointerInput,
+    Callback, ComputedData, Constraint, Dp, FloatRect, FocusDirection, FocusGroupNode,
+    FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, LayoutPolicy,
+    LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier, PointerInput,
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, PxSize, RenderSlot, State,
     accesskit::{Live, Role},
     launch_once,
-    layout::{Stack, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     popup::{PopupPositionInput, PopupPositionPolicy, popup},
     remember, tessera,
@@ -569,6 +570,28 @@ fn popup_position(
     )
 }
 
+/// Measures the tooltip inside the window minus its edge margins.
+#[derive(Clone, PartialEq)]
+struct WindowMargin;
+
+impl LayoutPolicy for WindowMargin {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let margins = Px::from(Dp(16.0));
+        let parent = scope.parent_constraint();
+        let constraint = Constraint {
+            width: parent.width().without_min() - margins,
+            height: parent.height().without_min() - margins,
+        };
+        let mut result = LayoutResult::new(ComputedData::ZERO);
+        for child in scope.children() {
+            let size = child.measure(scope, &constraint)?.size();
+            result.size = size;
+            result.place_child(child, PxPosition::ZERO);
+        }
+        Ok(result)
+    }
+}
+
 impl PopupPositionPolicy for TooltipPlacement {
     fn position(&self, input: &PopupPositionInput) -> PxPosition {
         popup_position(
@@ -760,18 +783,32 @@ fn tooltip_popup(
     popup(placement)
         .on_dismiss_request(move || controller.with_mut(TooltipController::dismiss))
         .child(move || {
-            let panel = tooltip_panel(message.clone(), controller)
-                .modifier_optional(modifier.clone())
-                .variant_optional(variant)
-                .headline_optional(headline.clone())
-                .action_label_optional(action_label.clone());
-            if let Some(on_action) = on_action {
-                panel.on_action_shared(on_action);
-            }
-            if let Some(actions) = &actions {
-                panel.actions_shared(actions.clone());
-            }
+            let (message, modifier, headline, action_label, actions) = (
+                message.clone(),
+                modifier.clone(),
+                headline.clone(),
+                action_label.clone(),
+                actions.clone(),
+            );
+            tooltip_margin(move || {
+                let panel = tooltip_panel(message.clone(), controller)
+                    .modifier_optional(modifier.clone())
+                    .variant_optional(variant)
+                    .headline_optional(headline.clone())
+                    .action_label_optional(action_label.clone());
+                if let Some(on_action) = on_action {
+                    panel.on_action_shared(on_action);
+                }
+                if let Some(actions) = &actions {
+                    panel.actions_shared(actions.clone());
+                }
+            });
         });
+}
+
+#[tessera]
+fn tooltip_margin(content: RenderSlot) {
+    layout(WindowMargin).child(content);
 }
 
 #[tessera]
