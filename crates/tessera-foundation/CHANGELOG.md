@@ -1,3 +1,9 @@
+## [v0.1.1] - 2026-11-24
+
+- Update interaction modifiers for Tessera 4 focus handling. Pointer activation preserves the focus of the control that handled the press.
+
+[v0.1.1]: https://github.com/tessera-ui/tessera/compare/tessera-foundation-v0.1.0...tessera-foundation-v0.1.1
+
 ## [v0.1.0] - 2026-11-16
 
 ### Added

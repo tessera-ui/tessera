@@ -1,3 +1,9 @@
+## [v1.1.0] - 2026-11-24
+
+- Generate mobile projects with native platform-view support. The component checker recognizes `popup` as a node-emitting API alongside `layout` and `group`.
+
+[v1.1.0]: https://github.com/tessera-ui/tessera/compare/cargo-tessera-v1.0.0...cargo-tessera-v1.1.0
+
 ## [v1.0.0] - 2026-11-16
 
 Requires Rust 1.98 or newer and targets Tessera 3.
