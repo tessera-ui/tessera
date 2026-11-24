@@ -91,7 +91,6 @@ impl MacosPlatformViews {
         }
         let view = factory.create(main_thread);
         view.setWantsLayer(true);
-        view.setHidden(true);
         let container = main_thread
             .alloc::<PlatformViewContainer>()
             .set_ivars(RefCell::default());
