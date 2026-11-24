@@ -29,10 +29,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: tessera-ui/setup-tessera@v1.0.1
+      - uses: tessera-ui/setup-tessera@v1.1.0
         with:
           tessera-version: workspace
           tools: ""
+          # The Web example build matches the CI Web check, which saves the cache.
+          cache-scope: check_web
+          cache-save: false
       - name: Build Documentation
         run: |
           cargo doc --workspace --exclude tessera-cosmic-text --no-deps
