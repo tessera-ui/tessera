@@ -84,7 +84,9 @@ impl TextFieldDefaults {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct TextFieldLayout;
+struct TextFieldLayout {
+    multiline: bool,
+}
 
 impl tessera_ui::LayoutPolicy for TextFieldLayout {
     fn place(
@@ -118,7 +120,11 @@ impl tessera_ui::LayoutPolicy for TextFieldLayout {
         };
         let child_constraint = Constraint::new(
             AxisConstraint::exact(width),
-            parent_constraint.height.without_min(),
+            if self.multiline {
+                parent_constraint.height
+            } else {
+                parent_constraint.height.without_min()
+            },
         );
         let mut height = Px::ZERO;
         let mut result = LayoutResult::default();
@@ -271,6 +277,7 @@ struct TextFieldProps {
     pub show_indicator: bool,
     /// Input line limit policy.
     pub line_limit: TextFieldLineLimit,
+    pub show_scrollbar: bool,
     /// Context menu configuration.
     pub context_menu: TextFieldContextMenu,
     /// Optional transform applied to text changes before on_change.
@@ -358,6 +365,7 @@ impl Default for TextFieldProps {
             suffix: None,
             show_indicator: true,
             line_limit: TextFieldLineLimit::SingleLine,
+            show_scrollbar: false,
             context_menu: TextFieldContextMenu::default(),
             input_transform: None,
             obfuscation_char: None,
@@ -459,6 +467,7 @@ fn build_editor_args(
         line_height: args.line_height,
         style: args.style,
         single_line: matches!(args.line_limit, TextFieldLineLimit::SingleLine),
+        show_scrollbar: args.show_scrollbar,
         input_transform,
         display_transform,
         controller: None,
@@ -582,18 +591,12 @@ fn field_click_pointer_position(
     let editor_cursor = editor
         .local_to_window
         .inverse_point(outer.local_to_window.map_point(cursor_pos));
-    let (horizontal, vertical) = controller.with(|controller| {
-        (
-            controller.scroll_controller().horizontal(),
-            controller.scroll_controller().vertical(),
-        )
-    });
+    let horizontal = controller.with(|controller| controller.scroll_controller().horizontal());
     Some(PxPosition::from_f32_xy(
         editor_cursor.x.clamp(0.0, editor.local_size.width.to_f32()) + horizontal,
         editor_cursor
             .y
-            .clamp(0.0, editor.local_size.height.to_f32())
-            + vertical,
+            .clamp(0.0, editor.local_size.height.to_f32()),
     ))
 }
 
@@ -932,22 +935,22 @@ fn outlined_border(
 type FieldContentData = (TextFieldProps, TextInputProps, MaterialTheme, bool, bool);
 
 #[derive(Clone, PartialEq)]
-struct FieldBodyHeight {
-    target_height: Option<Px>,
-}
+struct FieldBodyHeight;
 
 impl tessera_ui::LayoutPolicy for FieldBodyHeight {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let Some(child) = input.children().first().copied() else {
             return Ok(LayoutResult::default());
         };
-        let natural_constraints =
-            Constraint::new(input.parent_constraint().width(), AxisConstraint::NONE);
-        let natural = child.probe_intrinsic(input, &natural_constraints)?;
-        let height = input
-            .parent_constraint()
-            .height()
-            .clamp(self.target_height.unwrap_or(natural.height));
+        let axis = input.parent_constraint().height();
+        let height = match axis.resolve_max() {
+            Some(height) if height == axis.resolve_min() => height,
+            _ => {
+                let natural =
+                    Constraint::new(input.parent_constraint().width(), AxisConstraint::NONE);
+                axis.clamp(child.probe_intrinsic(input, &natural)?.height)
+            }
+        };
         let constraints = Constraint::new(
             input.parent_constraint().width(),
             AxisConstraint::exact(height),
@@ -1061,6 +1064,7 @@ fn text_field_content(
         .style(surface_style)
         .shape(surface_args.shape)
         .block_input(!args.enabled)
+        .propagate_min_constraints(args.line_limit == TextFieldLineLimit::MultiLine)
         .modifier(
             surface_args
                 .modifier
@@ -1072,7 +1076,7 @@ fn text_field_content(
         )
         .content_color(color)
         .child(move || {
-            boxed().children(move || {
+            layout(tessera_ui::layout::Stack).child(move || {
                 text_field_body(data, controller, geometry, outline);
                 if let Some((color, width)) = border {
                     let args = data.with(|data| data.0.clone());
@@ -1133,16 +1137,12 @@ fn text_field_body(
             .on_surface
             .with_alpha(DISABLED_CONTENT_ALPHA)
     };
-    let target_height = if matches!(args.line_limit, TextFieldLineLimit::MultiLine) {
-        geometry.with(|geometry| geometry.outer.map(|outer| outer.local_size.height))
-    } else {
-        None
-    };
-    tessera_ui::layout::layout(FieldBodyHeight { target_height }).child(move || {
+    tessera_ui::layout::layout(FieldBodyHeight).child(move || {
         boxed().children(move || {
             row()
                 .modifier(
                     Modifier::new()
+                        .fill_max_width()
                         .fill_max_height()
                         .padding(Padding::new(left, top, right, bottom)),
                 )
@@ -1416,6 +1416,8 @@ fn text_field_menu_content(
 /// - `suffix` — optional suffix slot.
 /// - `show_indicator` — whether filled-style indicator is rendered.
 /// - `line_limit` — text line limit policy.
+/// - `show_scrollbar` — reserve space for a draggable scrollbar, shown only
+///   on overflow: horizontal for single-line fields, vertical for multiline.
 /// - `context_menu` — context menu policy.
 /// - `input_transform` — optional input transform callback.
 /// - `obfuscation_char` — optional obfuscation character.
@@ -1476,6 +1478,7 @@ pub fn text_field(
     suffix: Option<RenderSlot>,
     show_indicator: Option<bool>,
     line_limit: Option<TextFieldLineLimit>,
+    show_scrollbar: Option<bool>,
     context_menu: Option<TextFieldContextMenu>,
     input_transform: Option<CallbackWith<String, String>>,
     obfuscation_char: Option<char>,
@@ -1554,6 +1557,7 @@ pub fn text_field(
         suffix,
         show_indicator,
         line_limit,
+        show_scrollbar: show_scrollbar.unwrap_or(false),
         context_menu,
         input_transform,
         obfuscation_char,
@@ -1648,47 +1652,49 @@ pub fn text_field(
         text_field_pointer_detector(scope, controller, geometry, enabled)
     });
 
-    layout(TextFieldLayout)
-        .modifier(modifier.then(field_modifier))
-        .child(move || {
-            if menu_policy.enabled {
-                let render_args = render_args.clone();
-                let editor_args = editor_args.clone();
-                menu_anchor()
-                    .placement(MenuPlacement::BelowStart)
-                    .offset([Dp(0.0), Dp(4.0)])
-                    .close_on_focus_loss(true)
-                    .controller(menu_controller)
-                    .anchor_content(move || {
-                        text_field_content()
-                            .args(render_args.clone())
-                            .controller(controller)
-                            .editor(editor_args.clone())
-                            .geometry(geometry);
-                    })
-                    .menu_content(move |menu| {
-                        text_field_menu_content(CallbackWith::new(move |action| {
-                            apply_menu_action(
-                                action,
-                                controller,
-                                on_change,
-                                input_transform,
-                                enabled,
-                                read_only,
-                            );
-                        }))
-                        .scope(menu)
+    layout(TextFieldLayout {
+        multiline: line_limit == TextFieldLineLimit::MultiLine,
+    })
+    .modifier(modifier.then(field_modifier))
+    .child(move || {
+        if menu_policy.enabled {
+            let render_args = render_args.clone();
+            let editor_args = editor_args.clone();
+            menu_anchor()
+                .placement(MenuPlacement::BelowStart)
+                .offset([Dp(0.0), Dp(4.0)])
+                .close_on_focus_loss(true)
+                .controller(menu_controller)
+                .anchor_content(move || {
+                    text_field_content()
+                        .args(render_args.clone())
                         .controller(controller)
-                        .menu(menu_policy);
-                    });
-            } else {
-                text_field_content()
-                    .args(render_args.clone())
+                        .editor(editor_args.clone())
+                        .geometry(geometry);
+                })
+                .menu_content(move |menu| {
+                    text_field_menu_content(CallbackWith::new(move |action| {
+                        apply_menu_action(
+                            action,
+                            controller,
+                            on_change,
+                            input_transform,
+                            enabled,
+                            read_only,
+                        );
+                    }))
+                    .scope(menu)
                     .controller(controller)
-                    .editor(editor_args.clone())
-                    .geometry(geometry);
-            }
-        });
+                    .menu(menu_policy);
+                });
+        } else {
+            text_field_content()
+                .args(render_args.clone())
+                .controller(controller)
+                .editor(editor_args.clone())
+                .geometry(geometry);
+        }
+    });
 }
 
 #[cfg(test)]
