@@ -3157,6 +3157,11 @@ fn compute_range_rects(
     };
 
     for run in buffer.layout_runs() {
+        // LayoutRun::highlight clips byte offsets within endpoint paragraphs,
+        // but assumes the caller excludes paragraphs outside the range.
+        if run.line_i < range_start.line || run.line_i > range_end.line {
+            continue;
+        }
         let line_top = Px(run.line_top as i32);
         let line_height = Px(run.line_height as i32);
 
@@ -4252,6 +4257,44 @@ mod tests {
             .expect("layout geometry should be available");
 
         assert!(!geometry.selection_rects.is_empty());
+    }
+
+    #[test]
+    fn selection_highlights_only_the_paragraphs_it_crosses() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
+        let text = "first\nsecond\nthird\nfourth";
+        let mut controller = controller_with_text(text);
+        let line_height = controller.line_height();
+        let start = text.find("second").unwrap() + 2;
+        let end = text.find("third").unwrap() + 2;
+
+        for selection in [
+            TextSelection { start, end },
+            TextSelection {
+                start: end,
+                end: start,
+            },
+        ] {
+            controller.set_text_and_selection(text, selection);
+            let rects = controller
+                .current_layout_geometry()
+                .unwrap()
+                .selection_rects;
+            assert_eq!(
+                rects.len(),
+                2,
+                "only the second and third lines are selected"
+            );
+            assert_eq!(rects[0].y, line_height);
+            assert!(rects[0].x > Px::ZERO, "start after the first two letters");
+            assert_eq!(rects[1].y, line_height + line_height);
+            assert_eq!(
+                rects[1].x,
+                Px::ZERO,
+                "the next line starts at its left edge"
+            );
+        }
     }
 
     #[test]
