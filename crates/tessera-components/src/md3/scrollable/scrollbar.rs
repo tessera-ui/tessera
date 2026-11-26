@@ -4,7 +4,7 @@
 //!
 //! Show and drag scroll thumbs beside overflowing content.
 
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
 
 use tessera_foundation::{
     modifier::ModifierExt as _,
@@ -15,7 +15,8 @@ use tessera_foundation::{
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
-    Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
+    Dp, LayoutResult, MeasurementError, Modifier, PointerEventPass, Px, PxPosition,
+    SemanticsModifierNode, State,
     accesskit::{Action, Role},
     launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
@@ -30,6 +31,7 @@ use crate::{
     md3::{
         scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarWheelModifierNode},
         surface::surface,
+        text_input::TextInputController,
         theme::{MaterialColorScheme, MaterialTheme},
     },
     modifier::with_pointer_input,
@@ -174,12 +176,45 @@ struct ScrollBarConfig {
     visible: Px,
     offset: Px,
     thickness: Dp,
-    state: State<ScrollableController>,
+    target: ScrollbarTarget,
     scrollbar_behavior: ScrollBarBehavior,
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
     scrollbar_controller: Option<ScrollBarController>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ScrollbarTarget {
+    Viewport(State<ScrollableController>),
+    Editor(State<TextInputController>),
+}
+
+impl ScrollBarConfig {
+    fn target_position(&self, orientation: ScrollOrientation) -> PxPosition {
+        match self.target {
+            ScrollbarTarget::Viewport(state) => state.with(|c| c.target_position()),
+            ScrollbarTarget::Editor(_) => orientation.position(self.offset, Px::ZERO),
+        }
+    }
+
+    fn move_to(&self, orientation: ScrollOrientation, position: PxPosition, immediate: bool) {
+        match self.target {
+            ScrollbarTarget::Viewport(state) => state.with_mut(|c| {
+                if immediate {
+                    c.set_scroll_position(position);
+                } else {
+                    c.set_target_position(position);
+                }
+            }),
+            ScrollbarTarget::Editor(state) => state.with_mut(|c| {
+                c.set_scrollbar_offset(
+                    -orientation.axis_px(position),
+                    orientation == ScrollOrientation::Horizontal,
+                );
+            }),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -268,7 +303,7 @@ impl ScrollBarController {
 
 fn calculate_target_pos(
     orientation: ScrollOrientation,
-    cursor: Px,
+    cursor_adjusted: f32,
     track_extent: Px,
     thumb_extent: Px,
     total: Px,
@@ -282,8 +317,7 @@ fn calculate_target_pos(
         return fallback;
     }
 
-    let cursor_adjusted = cursor - thumb_extent / 2;
-    let progress = (cursor_adjusted.to_f32() / thumb_scrollable_range.to_f32()).clamp(0.0, 1.0);
+    let progress = (cursor_adjusted / thumb_scrollable_range.to_f32()).clamp(0.0, 1.0);
 
     let content_scrollable_range = total - visible;
     if content_scrollable_range <= Px::ZERO {
@@ -385,11 +419,15 @@ fn mark_scroll_activity(state: &ScrollBarController, behavior: &ScrollBarBehavio
     }
 }
 
-fn compute_thumb_progress(offset: Px, total: Px) -> f32 {
-    if total <= Px::ZERO {
+fn compute_thumb_progress(args: &ScrollBarConfig) -> f32 {
+    let extent = match args.target {
+        ScrollbarTarget::Viewport(_) => args.total,
+        ScrollbarTarget::Editor(_) => args.total - args.visible,
+    };
+    if extent <= Px::ZERO {
         0.0
     } else {
-        offset.to_f32().abs() / total.to_f32()
+        args.offset.to_f32().abs() / extent.to_f32()
     }
 }
 
@@ -404,7 +442,15 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
     // Clamp the thumb size to ensure it's always visible and provides a
     // reasonable drag target.
     let min_thumb = (visible_len * 0.05).clamp(8.0, 32.0);
-    Px::saturating_from_f32(thumb.max(min_thumb))
+    Px::saturating_from_f32(thumb.max(min_thumb).min(visible_len))
+}
+
+fn thumb_offset(args: &ScrollBarConfig) -> f32 {
+    let travel = match args.target {
+        ScrollbarTarget::Viewport(_) => args.visible,
+        ScrollbarTarget::Editor(_) => args.visible - compute_thumb_size(args.visible, args.total),
+    };
+    travel.to_f32() * compute_thumb_progress(args)
 }
 
 fn cursor_on_thumb(
@@ -437,7 +483,7 @@ fn apply_scrollbar_semantics(
         .to_string(),
     );
 
-    let progress = compute_thumb_progress(args.offset, args.total).clamp(0.0, 1.0);
+    let progress = compute_thumb_progress(args).clamp(0.0, 1.0);
     accessibility.numeric_value = Some(progress as f64);
     accessibility.min_numeric_value = Some(0.0);
     accessibility.max_numeric_value = Some(1.0);
@@ -500,11 +546,10 @@ fn scroll_accessibility_step(
         }
     };
 
-    let new_target = args.state.with(|c| {
-        c.target_position()
-            .saturating_offset(delta.x_px(), delta.y_px())
-    });
-    args.state.with_mut(|c| c.set_target_position(new_target));
+    let new_target = args
+        .target_position(orientation)
+        .saturating_offset(delta.x_px(), delta.y_px());
+    args.move_to(orientation, new_target, false);
 
     mark_scroll_activity(state, &args.scrollbar_behavior);
 }
@@ -520,8 +565,7 @@ fn update_drag(
         let new_target_pos = calculate_target(orientation.axis_px(cursor_pos));
         // Dragging the thumb is direct manipulation: the content has to follow
         // the pointer without the eased follow used for wheel notches.
-        args.state
-            .with_mut(|c| c.set_scroll_position(new_target_pos));
+        args.move_to(orientation, new_target_pos, true);
         mark_scroll_activity(state, &args.scrollbar_behavior);
     } else {
         // Cursor left window: stop dragging.
@@ -550,11 +594,11 @@ fn handle_press(
 ) {
     // Capture current target position once to avoid locking inside helper on
     // every call.
-    let fallback_pos = args.state.with(|c| c.target_position());
+    let fallback_pos = args.target_position(orientation);
     let calculate_target_pos = |cursor: Px| -> PxPosition {
         calculate_target_pos(
             orientation,
-            cursor,
+            (cursor - metrics.thumb_extent / 2).to_f32(),
             metrics.track_extent,
             metrics.thumb_extent,
             args.total,
@@ -566,7 +610,7 @@ fn handle_press(
     let within_track = cursor_pos
         .map(|pos| cursor_on_thumb(orientation, pos, thickness, 0.0, metrics.track_extent))
         .unwrap_or(false);
-    let thumb_offset = args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32());
+    let thumb_offset = thumb_offset(args);
     let is_on_thumb = cursor_pos
         .map(|pos| {
             cursor_on_thumb(
@@ -582,8 +626,7 @@ fn handle_press(
         state.with_mut(|state| state.pressed_on_thumb = true);
     } else if within_track && let Some(cursor_pos) = cursor_pos {
         let new_target_pos = calculate_target_pos(orientation.axis_px(cursor_pos));
-        args.state
-            .with_mut(|c| c.set_target_position(new_target_pos));
+        args.move_to(orientation, new_target_pos, false);
         mark_scroll_activity(state, &args.scrollbar_behavior);
     }
 }
@@ -626,7 +669,7 @@ pub fn scrollbar_v(
 ) {
     scrollbar(
         ScrollOrientation::Vertical,
-        controller.expect("scrollbar_v requires controller"),
+        ScrollbarTarget::Viewport(controller.expect("scrollbar_v requires controller")),
     )
     .total_optional(total)
     .visible_optional(visible)
@@ -677,7 +720,7 @@ pub fn scrollbar_h(
 ) {
     scrollbar(
         ScrollOrientation::Horizontal,
-        controller.expect("scrollbar_h requires controller"),
+        ScrollbarTarget::Viewport(controller.expect("scrollbar_h requires controller")),
     )
     .total_optional(total)
     .visible_optional(visible)
@@ -691,9 +734,27 @@ pub fn scrollbar_h(
 }
 
 #[tessera]
+pub(crate) fn editor_scrollbar(controller: State<TextInputController>, horizontal: bool) {
+    let metrics = controller.with(|c| c.scrollbar_metrics());
+    if metrics.visible > Px::ZERO && metrics.total > metrics.visible {
+        scrollbar(
+            if horizontal {
+                ScrollOrientation::Horizontal
+            } else {
+                ScrollOrientation::Vertical
+            },
+            ScrollbarTarget::Editor(controller),
+        )
+        .total(metrics.total)
+        .visible(metrics.visible)
+        .offset(-metrics.offset);
+    }
+}
+
+#[tessera]
 fn scrollbar(
     orientation: ScrollOrientation,
-    state: State<ScrollableController>,
+    target: ScrollbarTarget,
     total: Option<Px>,
     visible: Option<Px>,
     offset: Option<Px>,
@@ -704,13 +765,20 @@ fn scrollbar(
     thumb_hover_color: Option<Color>,
     scrollbar_controller: Option<ScrollBarController>,
 ) {
-    let total = total
-        .unwrap_or_else(|| state.with(|controller| orientation.extent(controller.child_size())));
-    let visible = visible
-        .unwrap_or_else(|| state.with(|controller| orientation.extent(controller.visible_size())));
-    let offset = offset.unwrap_or_else(|| {
-        state.with(|controller| orientation.axis_px(controller.child_position()))
-    });
+    let (total, visible, offset) = match target {
+        ScrollbarTarget::Viewport(state) => state.with(|c| {
+            (
+                total.unwrap_or_else(|| orientation.extent(c.child_size())),
+                visible.unwrap_or_else(|| orientation.extent(c.visible_size())),
+                offset.unwrap_or_else(|| orientation.axis_px(c.child_position())),
+            )
+        }),
+        ScrollbarTarget::Editor(_) => (
+            total.unwrap_or_default(),
+            visible.unwrap_or_default(),
+            offset.unwrap_or_default(),
+        ),
+    };
     let thickness = thickness.unwrap_or(ScrollbarDefaults::THICKNESS);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
@@ -725,7 +793,7 @@ fn scrollbar(
         visible,
         offset,
         thickness,
-        state,
+        target,
         scrollbar_behavior,
         track_color,
         thumb_color,
@@ -784,7 +852,7 @@ fn scrollbar(
     };
     let modifier = with_pointer_input(Modifier::new(), move |input| {
         let args = live.get();
-        let offset = args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32());
+        let offset = thumb_offset(&args);
         let on_thumb = input.cursor_position_rel.is_some_and(|position| {
             cursor_on_thumb(
                 orientation,
@@ -799,7 +867,16 @@ fn scrollbar(
     .pointer_input((orientation, state), move |mut scope| async move {
         detect_tap_gestures(
             &mut scope,
-            TapGestureConfig::default(),
+            TapGestureConfig {
+                pass: if matches!(target, ScrollbarTarget::Editor(_)) {
+                    PointerEventPass::Initial
+                } else {
+                    PointerEventPass::Main
+                },
+                consume_down: matches!(target, ScrollbarTarget::Editor(_)),
+                consume_up: matches!(target, ScrollbarTarget::Editor(_)),
+                ..Default::default()
+            },
             |gesture| match gesture {
                 TapGesture::Pressed(down) => {
                     let args = live.get();
@@ -821,6 +898,7 @@ fn scrollbar(
         .await;
     })
     .pointer_input((orientation, state), move |mut scope| async move {
+        let grab_offset = Cell::new(0.0);
         detect_drag_gestures(
             &mut scope,
             DragGestureConfig {
@@ -830,8 +908,19 @@ fn scrollbar(
                 }),
                 ..Default::default()
             },
-            |_| {
-                if state.read().pressed_on_thumb {
+            |down| {
+                if state.read().pressed_on_thumb
+                    && let Some(position) = down.local_position
+                {
+                    let args = live.get();
+                    grab_offset.set(match target {
+                        ScrollbarTarget::Viewport(_) => {
+                            (compute_thumb_size(args.visible, args.total) / 2).to_f32()
+                        }
+                        ScrollbarTarget::Editor(_) => {
+                            orientation.cursor(position).0 - thumb_offset(&args)
+                        }
+                    });
                     state.with_mut(|state| state.is_dragging = true);
                 }
             },
@@ -840,14 +929,14 @@ fn scrollbar(
                     return;
                 }
                 let args = live.get();
-                let fallback = args.state.with(|c| c.target_position());
+                let fallback = args.target_position(orientation);
                 update_drag(
                     orientation,
                     event.cursor_position,
                     &|cursor| {
                         calculate_target_pos(
                             orientation,
-                            cursor,
+                            cursor.to_f32() - grab_offset.get(),
                             args.visible,
                             compute_thumb_size(args.visible, args.total),
                             args.total,
@@ -863,27 +952,31 @@ fn scrollbar(
             stop,
         )
         .await;
-    })
-    .pointer_input(
-        (
-            args.state,
-            state,
-            args.scrollbar_behavior.clone(),
-            nested_scroll_connection.clone(),
-        ),
-        move |scope| {
-            let node = ScrollbarWheelModifierNode {
-                controller: live.with(|args| args.state),
-                connection: nested_scroll_connection.clone(),
-                scrollbar_controller: state,
-                behavior: live.with(|args| args.scrollbar_behavior.clone()),
-            };
-            async move {
-                node.detect(scope).await;
-            }
-        },
-    )
-    .push_semantics(ScrollbarSemanticsModifierNode {
+    });
+    let modifier = if let ScrollbarTarget::Viewport(controller) = target {
+        modifier.pointer_input(
+            (
+                controller,
+                state,
+                args.scrollbar_behavior.clone(),
+                nested_scroll_connection.clone(),
+            ),
+            move |scope| {
+                let node = ScrollbarWheelModifierNode {
+                    controller,
+                    connection: nested_scroll_connection.clone(),
+                    scrollbar_controller: state,
+                    behavior: live.with(|args| args.scrollbar_behavior.clone()),
+                };
+                async move {
+                    node.detect(scope).await;
+                }
+            },
+        )
+    } else {
+        modifier
+    };
+    let modifier = modifier.push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
         state,
         orientation,
@@ -894,8 +987,7 @@ fn scrollbar(
     } else {
         args.thumb_color.with_alpha(0.0)
     };
-    let progress = compute_thumb_progress(args.offset, args.total);
-    let thumb_offset = args.visible.to_f32() * progress;
+    let thumb_offset = thumb_offset(&args);
 
     tessera_ui::layout::layout(ScrollBarLayout {
         thumb_offset: orientation.position(Px::from_f32(thumb_offset), Px::ZERO),

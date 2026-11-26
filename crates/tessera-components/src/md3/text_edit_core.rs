@@ -410,6 +410,7 @@ impl TextScrollState {
         self.scroll.horizontal
     }
 
+    #[cfg(test)]
     pub(crate) fn vertical(&self) -> f32 {
         self.scroll.vertical
     }
@@ -420,6 +421,21 @@ impl TextScrollState {
         scroll.vertical = 0.0;
         Self { scroll }
     }
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub(crate) struct EditorScrollbarMetrics {
+    pub(crate) total: Px,
+    pub(crate) visible: Px,
+    pub(crate) offset: Px,
+}
+
+#[derive(Default)]
+struct VerticalScrollLayout {
+    key: Option<(u64, Option<f32>)>,
+    // Cosmic Text stores a paragraph index and an offset within it, not an
+    // absolute document offset. Include the document end as a sentinel.
+    tops: Vec<f32>,
 }
 
 #[derive(Clone, Default)]
@@ -772,26 +788,6 @@ impl TextEditState {
                 .fold(0.0f32, |width, run| width.max(run.line_w));
             content_width - viewport_width > f32::EPSILON
         })
-    }
-
-    fn has_vertical_overflow(&mut self) -> bool {
-        self.editor.with_buffer_mut(|buffer| {
-            let viewport_height = buffer.size().1.unwrap_or(0.0);
-            if viewport_height <= f32::EPSILON {
-                return false;
-            }
-            let content_height = buffer.layout_runs().fold(0.0f32, |height, run| {
-                height.max(run.line_top + run.line_height)
-            });
-            content_height - viewport_height > f32::EPSILON
-        })
-    }
-
-    fn scroll_vertical_by(&mut self, delta: f32) {
-        self.editor.action(
-            &mut shaping_fonts(),
-            glyphon::Action::Scroll { pixels: delta },
-        );
     }
 
     fn shape_until_cursor(&mut self) -> glyphon::cosmic_text::Scroll {
@@ -1809,6 +1805,8 @@ pub struct TextEditorController {
     ime_state: TextImeState,
     layout_state: TextLayoutState,
     intrinsic_size_cache: Option<(TextLayoutCacheKey, ComputedData)>,
+    vertical_scroll_layout: VerticalScrollLayout,
+    scrollbar_metrics: EditorScrollbarMetrics,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2026,6 +2024,8 @@ impl TextEditorController {
             ime_state: TextImeState { composition: None },
             layout_state: TextLayoutState::new(),
             intrinsic_size_cache: None,
+            vertical_scroll_layout: VerticalScrollLayout::default(),
+            scrollbar_metrics: EditorScrollbarMetrics::default(),
         }
     }
 
@@ -2074,6 +2074,7 @@ impl TextEditorController {
 
         self.edit_state
             .sync_size_and_shape_until_scroll(&constraint);
+        self.sync_scroll_state_from_editor();
 
         let (display_buffer, transformed_text) = if let Some(transformed) = display {
             let (metrics, scroll) = self.edit_state.metrics_and_scroll();
@@ -2261,13 +2262,7 @@ impl TextEditorController {
     }
 
     pub(crate) fn scroll_vertical_by(&mut self, delta: f32) {
-        let scroll_before = self.scroll_controller.as_scroll();
-        self.edit_state.scroll_vertical_by(delta);
-        self.sync_scroll_state_from_editor();
-        if self.scroll_controller.as_scroll() != scroll_before {
-            self.sync_layout_snapshot_scroll();
-            self.invalidate_layout_geometry();
-        }
+        self.scroll_vertical_consumed(delta);
     }
 
     pub(crate) fn scroll_horizontal_consumed(&mut self, delta: f32) -> f32 {
@@ -2277,9 +2272,27 @@ impl TextEditorController {
     }
 
     pub(crate) fn scroll_vertical_consumed(&mut self, delta: f32) -> f32 {
-        let before = self.scroll_controller().vertical();
-        self.scroll_vertical_by(delta);
-        self.scroll_controller().vertical() - before
+        let (total, visible, before) = self.vertical_scroll_extents();
+        if visible <= 0.0 || total <= visible {
+            return 0.0;
+        }
+        let next = (before + delta).clamp(0.0, total - visible);
+        if next == before {
+            return 0.0;
+        }
+        let tops = &self.vertical_scroll_layout.tops;
+        let line = tops.partition_point(|&top| top <= next) - 1;
+        let mut scroll = self.scroll_controller.as_scroll();
+        scroll.line = line;
+        scroll.vertical = next - tops[line];
+        self.edit_state.editor.with_buffer_mut(|buffer| {
+            buffer.set_scroll(scroll);
+            buffer.shape_until_scroll(&mut shaping_fonts(), false);
+        });
+        self.sync_scroll_state_from_editor();
+        self.sync_layout_snapshot_scroll();
+        self.invalidate_layout_geometry();
+        self.vertical_scroll_extents().2 - before
     }
 
     pub(crate) fn has_horizontal_overflow(&mut self) -> bool {
@@ -2287,7 +2300,74 @@ impl TextEditorController {
     }
 
     pub(crate) fn has_vertical_overflow(&mut self) -> bool {
-        self.edit_state.has_vertical_overflow()
+        let (total, visible, _) = self.vertical_scroll_extents();
+        visible > 0.0 && total > visible
+    }
+
+    fn vertical_scroll_extents(&mut self) -> (f32, f32, f32) {
+        let version = self.text_layout_version();
+        let cache = &mut self.vertical_scroll_layout;
+        self.edit_state.editor.with_buffer_mut(|buffer| {
+            let (width, height) = buffer.size();
+            let Some(visible) = height else {
+                return (0.0, 0.0, 0.0);
+            };
+            let key = (version, width);
+            if cache.key != Some(key) {
+                let mut fonts = shaping_fonts();
+                let line_height = buffer.metrics().line_height;
+                cache.tops.clear();
+                cache.tops.push(0.0);
+                let mut total = 0.0;
+                for line in 0..buffer.lines.len() {
+                    if let Some(layout) = buffer.line_layout(&mut fonts, line) {
+                        total += layout
+                            .iter()
+                            .map(|row| row.line_height_opt.unwrap_or(line_height))
+                            .sum::<f32>();
+                    }
+                    cache.tops.push(total);
+                }
+                cache.key = Some(key);
+            }
+            let scroll = buffer.scroll();
+            let total = *cache.tops.last().unwrap_or(&0.0);
+            let offset = cache.tops.get(scroll.line).copied().unwrap_or(total) + scroll.vertical;
+            (total, visible, offset)
+        })
+    }
+
+    pub(crate) fn scrollbar_metrics(&self) -> EditorScrollbarMetrics {
+        self.scrollbar_metrics
+    }
+
+    pub(crate) fn set_scrollbar_offset(&mut self, offset: Px, horizontal: bool) {
+        let offset = offset.to_f32();
+        if horizontal {
+            self.scroll_horizontal_by(offset - self.scroll_controller().horizontal());
+        } else {
+            let (_, _, before) = self.vertical_scroll_extents();
+            self.scroll_vertical_by(offset - before);
+        }
+    }
+
+    fn measure_scrollbar(&mut self) -> EditorScrollbarMetrics {
+        let (total, visible, offset) = if self.single_line() {
+            self.edit_state.with_buffer(|buffer| {
+                let visible = buffer.size().0.unwrap_or(0.0);
+                let total = buffer
+                    .layout_runs()
+                    .fold(0.0f32, |width, run| width.max(run.line_w));
+                (total, visible, buffer.scroll().horizontal)
+            })
+        } else {
+            self.vertical_scroll_extents()
+        };
+        EditorScrollbarMetrics {
+            total: Px::from_f32(total.round()),
+            visible: Px::from_f32(visible),
+            offset: Px::from_f32(offset.round()),
+        }
     }
 
     /// Returns whether a display transform is active.
@@ -3413,11 +3493,12 @@ fn measured_editor_size(
 struct TextEditLayout {
     controller: State<TextEditorController>,
     layout_version: u64,
+    show_scrollbar: bool,
 }
 
 impl PartialEq for TextEditLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.layout_version == other.layout_version
+        self.layout_version == other.layout_version && self.show_scrollbar == other.show_scrollbar
     }
 }
 
@@ -3451,8 +3532,9 @@ impl tessera_ui::LayoutPolicy for TextEditLayout {
             });
             return Ok(result.with_size(size));
         }
-        if let Some((_, _, _, computed_data)) =
-            self.controller.with(|c| c.cached_layout(&text_constraint))
+        if !self.show_scrollbar
+            && let Some((_, _, _, computed_data)) =
+                self.controller.with(|c| c.cached_layout(&text_constraint))
         {
             return Ok(result.with_size(computed_data));
         }
@@ -3490,6 +3572,9 @@ impl tessera_ui::LayoutPolicy for TextEditLayout {
             measured_editor_size(&text_data, &text_constraint, controller.single_line())
         });
         self.controller.with_mut(|c| {
+            if self.show_scrollbar {
+                c.scrollbar_metrics = c.measure_scrollbar();
+            }
             c.update_layout_geometry(
                 &text_constraint,
                 selection_rects.clone(),
@@ -3583,12 +3668,14 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
 pub fn text_edit_core(
     controller: Option<State<TextEditorController>>,
     presentation_focused: Option<bool>,
+    show_scrollbar: Option<bool>,
 ) {
     let controller = controller.expect("text_edit_core requires a controller");
     let layout_version = controller.with(|c| c.layout_version());
     let policy = TextEditLayout {
         controller,
         layout_version,
+        show_scrollbar: show_scrollbar.unwrap_or(false),
     };
     let initial_blink = (controller.with(|c| c.blink_epoch()), true);
     let blink = remember(|| initial_blink);
@@ -4154,10 +4241,12 @@ mod tests {
             },
             controller.prepare_display(),
         );
-        assert!(controller.scroll_vertical_consumed(1_000.0) > 0.0);
+        let range = controller.line_height().to_f32() * 8.0 - 20.0;
+        assert_eq!(controller.scroll_vertical_consumed(1_000.0), range);
         // The editor engine clamps vertical scroll, so at the bottom nothing
         // more is consumed and the remainder can go to an ancestor.
         assert_eq!(controller.scroll_vertical_consumed(1_000.0), 0.0);
+        assert_eq!(controller.scroll_vertical_consumed(-1_000.0), -range);
     }
 
     #[test]

@@ -200,6 +200,7 @@ struct SurfaceResolvedArgs {
     tonal_elevation: Dp,
     content_color: Option<Color>,
     content_alignment: Alignment,
+    propagate_min_constraints: bool,
     enabled: bool,
     on_click: Option<Callback>,
     on_long_click: Option<Callback>,
@@ -611,6 +612,7 @@ pub(super) fn resolve_visual_interaction(
 impl tessera_ui::LayoutPolicy for SurfaceLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.has_foreground() == other.has_foreground()
+            && self.args.propagate_min_constraints == other.args.propagate_min_constraints
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
@@ -660,7 +662,11 @@ impl tessera_ui::LayoutPolicy for SurfaceLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let parent_constraint = *input.parent_constraint().as_ref();
-        let child_constraint = input.parent_constraint().without_min();
+        let child_constraint = if self.args.propagate_min_constraints {
+            parent_constraint
+        } else {
+            input.parent_constraint().without_min()
+        };
         let children = input.children();
         let (foreground, children) = if self.has_foreground() {
             let (foreground, children) = children.split_last().expect("surface foreground");
@@ -1048,6 +1054,8 @@ fn surface_content(
 /// - `tonal_elevation` — optional tonal elevation tint for theme surfaces.
 /// - `content_color` — optional explicit content color override.
 /// - `content_alignment` — optional child alignment within the surface bounds.
+/// - `propagate_min_constraints` — pass the surface's minimum size constraints
+///   to its content. Off by default.
 /// - `enabled` — optional interactive enabled flag.
 /// - `on_long_click` — optional stationary long-press action; also available
 ///   through the context-menu key, Shift+F10, and accessibility context action.
@@ -1110,6 +1118,7 @@ pub fn surface(
     tonal_elevation: Option<Dp>,
     content_color: Option<Color>,
     content_alignment: Option<Alignment>,
+    propagate_min_constraints: Option<bool>,
     enabled: Option<bool>,
     on_click: Option<Callback>,
     on_long_click: Option<Callback>,
@@ -1156,6 +1165,7 @@ pub fn surface(
         tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),
         content_color,
         content_alignment: content_alignment.unwrap_or_default(),
+        propagate_min_constraints: propagate_min_constraints.unwrap_or(false),
         enabled: enabled.unwrap_or(true),
         on_click,
         on_long_click,

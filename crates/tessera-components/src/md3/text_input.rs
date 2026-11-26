@@ -4,23 +4,24 @@
 //!
 //! Collect short-form input when the full text field decoration is not needed.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::modifier::{InteractionState, InteractionVisualState, ModifierExt as _};
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, Padding,
+};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData,
-    CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput,
-    KeyboardInputModifierNode, Modifier, PressKeyEventType, Px, PxPosition, PxSize,
-    SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
+    ComputedData, Constraint, CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest,
+    KeyboardInput, KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier,
+    PressKeyEventType, Px, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
-    layout::{Stack, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context, winit,
 };
 
 use crate::{
-    alignment::Alignment,
-    boxed::boxed,
     md3::{
+        scrollable::scrollbar::{ScrollbarDefaults, editor_scrollbar},
         surface::{SurfaceStyle, surface},
         text_edit_core::{
             ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
@@ -221,6 +222,7 @@ pub(crate) struct TextInputProps {
     ///
     /// Text does not wrap and scrolls horizontally.
     pub single_line: bool,
+    pub show_scrollbar: bool,
     /// Optional transform applied to text changes before on_change.
     pub input_transform: Option<CallbackWith<String, String>>,
     /// Optional transform applied only for display.
@@ -263,6 +265,7 @@ impl Default for TextInputProps {
             line_height: Some(Dp(24.0)),
             style: None,
             single_line: false,
+            show_scrollbar: false,
             input_transform: None,
             display_transform: None,
             controller: None,
@@ -331,6 +334,8 @@ impl TextInputBuilder {
 /// - `display_transform` — optional display-only transform.
 /// - `controller` — optional external controller for text, cursor, and
 ///   selection state.
+/// - `show_scrollbar` — reserve space for a draggable scrollbar, shown only
+///   on overflow: horizontal for single-line input, vertical otherwise.
 ///
 /// ## Examples
 /// ```rust
@@ -373,6 +378,7 @@ pub fn text_input(
     line_height: Option<Dp>,
     style: Option<TextStyle>,
     single_line: Option<bool>,
+    show_scrollbar: Option<bool>,
     input_transform: Option<CallbackWith<String, String>>,
     display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
@@ -445,6 +451,7 @@ pub fn text_input(
             ..style
         }),
         single_line,
+        show_scrollbar: show_scrollbar.unwrap_or(false),
         input_transform,
         display_transform,
         controller,
@@ -533,19 +540,81 @@ fn text_input_editor(props: TextInputProps) {
         controller,
     );
 
+    let show_scrollbar = editor_args.show_scrollbar && editor_args.enabled;
     let current = editor_args;
     let editor_args = remember(|| current.clone());
     if editor_args.with(|args| args != &current) {
         editor_args.set(current);
     }
-    boxed()
-        .alignment(Alignment::TopStart)
+    layout(EditorViewportLayout { show_scrollbar })
         .modifier(modifier)
-        .children(move || {
+        .child(move || {
             text_input_padded_content()
                 .props(editor_args)
                 .controller(controller);
         });
+}
+
+#[derive(Clone, PartialEq)]
+struct EditorViewportLayout {
+    show_scrollbar: bool,
+}
+
+impl tessera_ui::LayoutPolicy for EditorViewportLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let bounds = input.parent_constraint();
+        let child_bounds = if self.show_scrollbar {
+            *bounds.as_ref()
+        } else {
+            bounds.without_min()
+        };
+        let bounds = *bounds.as_ref();
+        let child = input.children()[0].measure(input, &child_bounds)?;
+        // Keep the pointer and semantic viewport at its assigned size even
+        // when the text only measures as wide as the caret.
+        let mut result = LayoutResult::new(ComputedData {
+            width: bounds.width.clamp(child.width),
+            height: bounds.height.clamp(child.height),
+        });
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct EditorScrollbarLayout {
+    horizontal: bool,
+}
+
+impl tessera_ui::LayoutPolicy for EditorScrollbarLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let editor = input.children()[0];
+        let bar = input.children().get(1).copied();
+        let bounds = *input.parent_constraint().as_ref();
+        let measured = editor.measure(input, &bounds)?;
+        let size = ComputedData {
+            width: bounds.width.clamp(measured.width),
+            height: bounds.height.clamp(measured.height),
+        };
+        let mut result = LayoutResult::new(size);
+        result.place_child(editor, PxPosition::ZERO);
+        if !input.is_intrinsic()
+            && let Some(bar) = bar
+        {
+            let constraints = Constraint::new(
+                AxisConstraint::new(Px::ZERO, Some(size.width)),
+                AxisConstraint::new(Px::ZERO, Some(size.height)),
+            );
+            let track = bar.measure(input, &constraints)?;
+            let position = if self.horizontal {
+                PxPosition::new(Px::ZERO, size.height - track.height)
+            } else {
+                PxPosition::new(size.width - track.width, Px::ZERO)
+            };
+            result.place_child(bar, position);
+        }
+        Ok(result)
+    }
 }
 
 #[tessera]
@@ -554,15 +623,51 @@ fn text_input_padded_content(
     controller: Option<State<TextInputController>>,
 ) {
     let props = props.expect("text_input_padded_content requires props to be set");
-    let padding = props.with(|args| args.padding);
+    let (padding, show_scrollbar, horizontal, enabled) = props.with(|args| {
+        (
+            args.padding,
+            args.show_scrollbar,
+            args.single_line,
+            args.enabled,
+        )
+    });
     let controller = controller.expect("text_input_padded_content requires controller to be set");
-    layout(Stack)
-        .modifier(Modifier::new().padding_all(padding))
-        .child(move || {
-            text_edit_core()
-                .controller(controller)
-                .presentation_focused(visual_focus(&props.get(), controller));
-        });
+    if show_scrollbar && enabled {
+        let thickness = ScrollbarDefaults::THICKNESS;
+        let gutter = if horizontal {
+            Padding::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, thickness)
+        } else {
+            Padding::new(Dp::ZERO, Dp::ZERO, thickness, Dp::ZERO)
+        };
+        layout(EditorScrollbarLayout { horizontal })
+            .modifier(Modifier::new().padding_all(padding))
+            .child(move || {
+                editor_surface(props, controller, Modifier::new().padding(gutter), true);
+                editor_scrollbar(controller, horizontal);
+            });
+    } else {
+        editor_surface(
+            props,
+            controller,
+            Modifier::new().padding_all(padding),
+            false,
+        );
+    }
+}
+
+#[tessera]
+fn editor_surface(
+    props: State<TextInputProps>,
+    controller: State<TextInputController>,
+    modifier: Modifier,
+    show_scrollbar: bool,
+) {
+    layout(Stack).modifier(modifier).child(move || {
+        text_edit_core()
+            .controller(controller)
+            .show_scrollbar(show_scrollbar)
+            .presentation_focused(visual_focus(&props.get(), controller));
+    });
 }
 
 pub(crate) fn visual_focus(args: &TextInputProps, controller: State<TextInputController>) -> bool {
@@ -828,30 +933,32 @@ fn drag_selection_pointer_position(
     controller: &State<TextInputController>,
     size: ComputedData,
 ) -> DragSelectionPointerPosition {
-    let (horizontal_scroll, vertical_scroll) = controller.with(|s| {
-        (
-            Px(s.scroll_controller().horizontal().round() as i32),
-            Px(s.scroll_controller().vertical().round() as i32),
-        )
-    });
+    let horizontal_scroll =
+        controller.with(|s| Px(s.scroll_controller().horizontal().round() as i32));
     let text_origin = text_content_origin(args);
+    let mut viewport_size = text_viewport_size_from_origin(size, text_origin);
+    if args.show_scrollbar && args.enabled {
+        let thickness = ScrollbarDefaults::THICKNESS.to_px();
+        if args.single_line {
+            viewport_size.height = (viewport_size.height - thickness).max(Px::ZERO);
+        } else {
+            viewport_size.width = (viewport_size.width - thickness).max(Px::ZERO);
+        }
+    }
     drag_selection_pointer_position_with_scroll(
         cursor_pos,
-        size,
+        viewport_size,
         text_origin,
         horizontal_scroll,
-        vertical_scroll,
     )
 }
 
 fn drag_selection_pointer_position_with_scroll(
     cursor_pos: PxPosition,
-    size: ComputedData,
+    viewport_size: ComputedData,
     text_origin: PxPosition,
     horizontal_scroll: Px,
-    vertical_scroll: Px,
 ) -> DragSelectionPointerPosition {
-    let viewport_size = text_viewport_size_from_origin(size, text_origin);
     let viewport_width = viewport_size.width.0 as f32;
     let viewport_height = viewport_size.height.0 as f32;
     let text_relative_x = cursor_pos.x - text_origin.x;
@@ -876,7 +983,8 @@ fn drag_selection_pointer_position_with_scroll(
     DragSelectionPointerPosition {
         position: PxPosition::from_f32_xy(
             clamped_x + horizontal_scroll.0 as f32,
-            clamped_y + vertical_scroll.0 as f32,
+            // Layout runs are already relative to the vertical scroll origin.
+            clamped_y,
         ),
         overflow_x,
         overflow_y,
@@ -1715,9 +1823,8 @@ mod tests {
 
         let drag_target = drag_selection_pointer_position_with_scroll(
             PxPosition::new(Px(-4), Px(60)),
-            size,
+            text_viewport_size_from_origin(size, text_origin),
             text_origin,
-            Px::ZERO,
             Px::ZERO,
         );
 
@@ -1732,32 +1839,6 @@ mod tests {
     }
 
     #[test]
-    fn drag_selection_pointer_position_applies_vertical_scroll_to_clamped_position() {
-        let text_origin = text_content_origin_from_values(Px(8), Px(1));
-        let size = ComputedData {
-            width: Px(120),
-            height: Px(40),
-        };
-
-        let drag_target = drag_selection_pointer_position_with_scroll(
-            PxPosition::new(Px(20), Px(20)),
-            size,
-            text_origin,
-            Px(5),
-            Px(11),
-        );
-
-        assert_eq!(
-            drag_target,
-            DragSelectionPointerPosition {
-                position: PxPosition::new(Px(16), Px(22)),
-                overflow_x: Px::ZERO,
-                overflow_y: Px::ZERO,
-            }
-        );
-    }
-
-    #[test]
     fn click_selection_pointer_position_clamps_inside_text_viewport() {
         let text_origin = text_content_origin_from_values(Px(8), Px(1));
         let size = ComputedData {
@@ -1767,9 +1848,8 @@ mod tests {
 
         let click_position = drag_selection_pointer_position_with_scroll(
             PxPosition::new(Px(2), Px(4)),
-            size,
+            text_viewport_size_from_origin(size, text_origin),
             text_origin,
-            Px::ZERO,
             Px::ZERO,
         )
         .position;
@@ -2459,15 +2539,16 @@ mod tests {
 
         use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::{
-            Dp, Modifier, Px, PxPosition, State, layout::layout, remember, tessera, testing::UiTest,
+            AxisConstraint, Dp, Modifier, Px, PxPosition, State, layout::layout, remember, tessera,
+            testing::UiTest,
         };
 
         use crate::{
             column::column,
             md3::{
                 scrollable::ScrollableController,
-                text_field::text_field,
-                text_input::text_input,
+                text_field::{TextFieldLineLimit, text_field},
+                text_input::{TextInputController, text_input},
                 theme::{MaterialTheme, material_theme},
             },
             spacer::spacer,
@@ -2618,6 +2699,146 @@ mod tests {
                 offset != 0.0,
                 "wheel over a text field should scroll the parent, got y={offset:?}"
             );
+        }
+
+        #[tessera]
+        fn scrolling_editor(
+            output: tessera_ui::testing::TestProbe<Option<State<TextInputController>>>,
+            single_line: bool,
+        ) {
+            let controller = remember(|| {
+                let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+                editor.set_text(if single_line {
+                    "A single long line that extends horizontally beyond the visible area."
+                } else {
+                    "One\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight"
+                });
+                editor
+            });
+            output.set(Some(controller));
+            material_theme().child(move || {
+                crate::boxed::boxed().children(move || {
+                    if single_line {
+                        text_input()
+                            .controller(controller)
+                            .modifier(Modifier::new().width(Dp(160.0)))
+                            .single_line(true)
+                            .show_scrollbar(true);
+                    } else {
+                        text_field()
+                            .controller(controller)
+                            .modifier(Modifier::new().width(Dp(160.0)).constrain(
+                                None,
+                                Some(AxisConstraint::new(Dp(56.0).into(), Some(Dp(80.0).into()))),
+                            ))
+                            .line_limit(TextFieldLineLimit::MultiLine)
+                            .show_scrollbar(true);
+                    }
+                })
+            });
+        }
+
+        #[test]
+        fn editor_scrollbars_follow_wheel_and_drag_without_editing_selection() {
+            use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role};
+
+            for (single_line, label) in [
+                (true, "Horizontal scrollbar"),
+                (false, "Vertical scrollbar"),
+            ] {
+                let output = tessera_ui::testing::TestProbe::default();
+                let probe = output.clone();
+                let mut session = UiTest::new()
+                    .viewport(220, 200)
+                    .content(move || scrolling_editor(probe.clone(), single_line));
+                session.frames(3);
+                let controller = output.get().unwrap();
+                let selection = controller.with(|c| c.selection());
+                let (_, node) = session.accessibility_node(label);
+                assert_eq!(node.numeric_value(), Some(0.0));
+                let center = PxPosition::new(Px(40), Px(24));
+                session.pointer_scroll(MOUSE_POINTER_ID, center, 0.0, -30.0);
+                session.frames(2);
+                let (_, node) = session.accessibility_node(label);
+                assert!(node.numeric_value().unwrap() > 0.0);
+
+                // Return to the track start, then drag from the leading edge
+                // of the thumb all the way to the track end.
+                let bounds = node.bounds().unwrap();
+                if !single_line {
+                    assert_eq!(
+                        bounds.y1 - bounds.y0,
+                        48.0,
+                        "the text viewport fills the capped field between its padding"
+                    );
+                }
+                let (start, end) = if single_line {
+                    (
+                        PxPosition::from_f32_xy(
+                            bounds.x0 as f32 + 1.0,
+                            ((bounds.y0 + bounds.y1) / 2.0) as f32,
+                        ),
+                        PxPosition::from_f32_xy(
+                            bounds.x1 as f32 - 1.0,
+                            ((bounds.y0 + bounds.y1) / 2.0) as f32,
+                        ),
+                    )
+                } else {
+                    (
+                        PxPosition::from_f32_xy(
+                            ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                            bounds.y0 as f32 + 1.0,
+                        ),
+                        PxPosition::from_f32_xy(
+                            ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                            bounds.y1 as f32 - 1.0,
+                        ),
+                    )
+                };
+                session.pointer_scroll(MOUSE_POINTER_ID, center, 0.0, 1000.0);
+                session.frames(2);
+                assert_eq!(session.accessibility_node(label).1.bounds(), Some(bounds));
+                session.pointer_move(MOUSE_POINTER_ID, start);
+                session.frame();
+                session.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Left);
+                session.frame();
+                session.pointer_move(MOUSE_POINTER_ID, end);
+                session.frames(2);
+                session.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
+                session.frames(2);
+                assert_eq!(
+                    session.accessibility_node(label).1.numeric_value(),
+                    Some(1.0),
+                    "{label} bounds={bounds:?} start={start:?} end={end:?}"
+                );
+                assert_eq!(controller.with(|c| c.selection()), selection);
+
+                if !single_line {
+                    session.pointer_scroll(MOUSE_POINTER_ID, center, 0.0, 1000.0);
+                    session.frames(2);
+                    session.pointer_scroll(MOUSE_POINTER_ID, center, 0.0, -30.0);
+                    session.frames(2);
+                    session.click_at(PxPosition::new(Px(19), Px(33)));
+                    assert!(
+                        (4..=7).contains(&controller.with(|c| c.cursor_offset())),
+                        "the click should hit the visible bottom of 'Two'"
+                    );
+                }
+
+                controller.with_mut(|c| c.set_text("Short"));
+                session.frames(3);
+                if !single_line {
+                    session.node("text_field").height(56);
+                }
+                assert!(
+                    !session
+                        .accessibility_snapshot()
+                        .unwrap()
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.role() == Role::ScrollBar)
+                );
+            }
         }
     }
 }
