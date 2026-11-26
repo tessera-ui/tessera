@@ -540,16 +540,45 @@ fn text_input_editor(props: TextInputProps) {
         controller,
     );
 
+    let show_scrollbar = editor_args.show_scrollbar && editor_args.enabled;
     let current = editor_args;
     let editor_args = remember(|| current.clone());
     if editor_args.with(|args| args != &current) {
         editor_args.set(current);
     }
-    layout(Stack).modifier(modifier).child(move || {
-        text_input_padded_content()
-            .props(editor_args)
-            .controller(controller);
-    });
+    layout(EditorViewportLayout { show_scrollbar })
+        .modifier(modifier)
+        .child(move || {
+            text_input_padded_content()
+                .props(editor_args)
+                .controller(controller);
+        });
+}
+
+#[derive(Clone, PartialEq)]
+struct EditorViewportLayout {
+    show_scrollbar: bool,
+}
+
+impl tessera_ui::LayoutPolicy for EditorViewportLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let bounds = input.parent_constraint();
+        let child_bounds = if self.show_scrollbar {
+            *bounds.as_ref()
+        } else {
+            bounds.without_min()
+        };
+        let bounds = *bounds.as_ref();
+        let child = input.children()[0].measure(input, &child_bounds)?;
+        // Keep the pointer and semantic viewport at its assigned size even
+        // when the text only measures as wide as the caret.
+        let mut result = LayoutResult::new(ComputedData {
+            width: bounds.width.clamp(child.width),
+            height: bounds.height.clamp(child.height),
+        });
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
 }
 
 #[derive(Clone, PartialEq)]

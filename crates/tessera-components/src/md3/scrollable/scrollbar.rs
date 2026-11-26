@@ -201,14 +201,6 @@ impl ScrollBarConfig {
     fn move_to(&self, orientation: ScrollOrientation, position: PxPosition, immediate: bool) {
         match self.target {
             ScrollbarTarget::Viewport(state) => state.with_mut(|c| {
-                let position = match orientation {
-                    ScrollOrientation::Vertical => {
-                        PxPosition::from_f32_xy(c.target_position().x, position.y)
-                    }
-                    ScrollOrientation::Horizontal => {
-                        PxPosition::from_f32_xy(position.x, c.target_position().y)
-                    }
-                };
                 if immediate {
                     c.set_scroll_position(position);
                 } else {
@@ -427,11 +419,15 @@ fn mark_scroll_activity(state: &ScrollBarController, behavior: &ScrollBarBehavio
     }
 }
 
-fn compute_thumb_progress(offset: Px, visible: Px, total: Px) -> f32 {
-    if total <= visible {
+fn compute_thumb_progress(args: &ScrollBarConfig) -> f32 {
+    let extent = match args.target {
+        ScrollbarTarget::Viewport(_) => args.total,
+        ScrollbarTarget::Editor(_) => args.total - args.visible,
+    };
+    if extent <= Px::ZERO {
         0.0
     } else {
-        (offset.to_f32().abs() / (total - visible).to_f32()).clamp(0.0, 1.0)
+        args.offset.to_f32().abs() / extent.to_f32()
     }
 }
 
@@ -450,8 +446,11 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
 }
 
 fn thumb_offset(args: &ScrollBarConfig) -> f32 {
-    (args.visible - compute_thumb_size(args.visible, args.total)).to_f32()
-        * compute_thumb_progress(args.offset, args.visible, args.total)
+    let travel = match args.target {
+        ScrollbarTarget::Viewport(_) => args.visible,
+        ScrollbarTarget::Editor(_) => args.visible - compute_thumb_size(args.visible, args.total),
+    };
+    travel.to_f32() * compute_thumb_progress(args)
 }
 
 fn cursor_on_thumb(
@@ -484,7 +483,7 @@ fn apply_scrollbar_semantics(
         .to_string(),
     );
 
-    let progress = compute_thumb_progress(args.offset, args.visible, args.total);
+    let progress = compute_thumb_progress(args).clamp(0.0, 1.0);
     accessibility.numeric_value = Some(progress as f64);
     accessibility.min_numeric_value = Some(0.0);
     accessibility.max_numeric_value = Some(1.0);
@@ -874,8 +873,8 @@ fn scrollbar(
                 } else {
                     PointerEventPass::Main
                 },
-                consume_down: true,
-                consume_up: true,
+                consume_down: matches!(target, ScrollbarTarget::Editor(_)),
+                consume_up: matches!(target, ScrollbarTarget::Editor(_)),
                 ..Default::default()
             },
             |gesture| match gesture {
@@ -913,7 +912,15 @@ fn scrollbar(
                 if state.read().pressed_on_thumb
                     && let Some(position) = down.local_position
                 {
-                    grab_offset.set(orientation.cursor(position).0 - thumb_offset(&live.get()));
+                    let args = live.get();
+                    grab_offset.set(match target {
+                        ScrollbarTarget::Viewport(_) => {
+                            (compute_thumb_size(args.visible, args.total) / 2).to_f32()
+                        }
+                        ScrollbarTarget::Editor(_) => {
+                            orientation.cursor(position).0 - thumb_offset(&args)
+                        }
+                    });
                     state.with_mut(|state| state.is_dragging = true);
                 }
             },
