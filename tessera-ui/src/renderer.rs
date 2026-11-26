@@ -6,6 +6,8 @@ pub(crate) mod core;
 
 #[cfg(target_os = "macos")]
 mod macos_titlebar;
+#[cfg(target_os = "windows")]
+mod windows_icon;
 
 use std::{
     cell::Cell,
@@ -2314,7 +2316,9 @@ where
                     tracing::warn!(%error, "Failed to set application identity");
                 }
             }
-            window_attributes.with_taskbar_icon(self.config.window.icon.clone())
+            window_attributes
+                .with_class_name(windows_icon::WINDOW_CLASS)
+                .with_taskbar_icon(self.config.window.icon.clone())
         };
         #[cfg(any(
             target_os = "linux",
@@ -2367,6 +2371,11 @@ where
                 return;
             }
         };
+
+        #[cfg(target_os = "windows")]
+        if let Some(icon) = &self.config.window.icon {
+            windows_icon::install_class_icon(&window, icon);
+        }
 
         // Initialize AccessKit adapter BEFORE showing the window
         if let Some(proxy) = self.event_loop_proxy.clone() {
