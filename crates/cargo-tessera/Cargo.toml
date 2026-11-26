@@ -19,7 +19,7 @@ path = "src/main.rs"
 # updates them with the packages they name.
 [package.metadata.tessera.scaffold]
 tessera-build = "1.0.1"
-tessera-components = "4.0.0"
+tessera-components = "4.1.0"
 tessera-foundation = "0.1.1"
 tessera-ui = "4.0.0"
 

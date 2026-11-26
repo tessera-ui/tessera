@@ -1,3 +1,11 @@
+## [v4.1.0] - 2026-11-26
+
+- Fix selection highlighting that painted paragraphs outside the selected range.
+- Add opt-in `show_scrollbar` to MD3 `text_input` and `text_field`. The scrollbar appears only when text overflows: horizontally for single-line input and vertically for multiline input.
+- Let bounded multiline fields grow and shrink with their contents, scroll across paragraph boundaries, and place the caret correctly when clicking after scrolling.
+
+[v4.1.0]: https://github.com/tessera-ui/tessera/compare/tessera-components-v4.0.0...tessera-components-v4.1.0
+
 ## [v4.0.0] - 2026-11-24
 
 - **Breaking:** MD3 overlays use core popup layers. Replace overlay providers with `menu_anchor`, `tooltip_box`, `dialog`, `bottom_sheet`, `modal_side_sheet`, or `standard_side_sheet`. Dialog bodies no longer take `DialogScope`; modal navigation rails take visibility at entry, slider indicators need no host, and FAB menus no longer wrap page content.

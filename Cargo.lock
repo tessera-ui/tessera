@@ -7282,7 +7282,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-components"
-version = "4.0.0"
+version = "4.1.0"
 dependencies = [
  "bytemuck",
  "encase",
