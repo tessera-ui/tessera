@@ -74,8 +74,6 @@ const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
 const RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::prop::RenderSlotWith::new";
 const PUBLIC_RENDER_SLOT_NEW_PATH: &str = "tessera_ui::RenderSlot::new";
 const PUBLIC_RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::RenderSlotWith::new";
-const MODIFIER_TYPE_PATH: &str = "tessera_ui::modifier::Modifier";
-const PUBLIC_MODIFIER_TYPE_PATH: &str = "tessera_ui::Modifier";
 const ENTRY_POINT_NEW_PATH: &str = "tessera_ui::entry_point::EntryPoint::new";
 const PUBLIC_ENTRY_POINT_NEW_PATH: &str = "tessera_ui::EntryPoint::new";
 const CORE_OPTION_TYPE_PATH: &str = "core::option::Option";
@@ -1218,8 +1216,7 @@ impl<'db> CallAnalyzer<'db> {
                 }
                 return (self.method_call_takes_render_slot_setter_at(&call, index)
                     || self.method_call_takes_render_slot_closure_at(&call, index)
-                    || self.method_call_takes_pending_property_at(&call, index)
-                    || self.method_call_takes_pointer_input_detector_at(&call, index))
+                    || self.method_call_takes_pending_property_at(&call, index))
                 .then_some(Carrier::Content);
             }
             current = node.parent();
@@ -1229,12 +1226,6 @@ impl<'db> CallAnalyzer<'db> {
     }
 
     fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {
-        if self.call_resolves_to(call, |function| {
-            self.pointer_input_detector_index(function)
-                .is_some_and(|parameter| index == parameter + 1)
-        }) {
-            return true;
-        }
         if index == 0 && self.call_is_build_entry(call) {
             return true;
         }
@@ -1282,31 +1273,6 @@ impl<'db> CallAnalyzer<'db> {
                         )
                     })
             })
-    }
-
-    fn method_call_takes_pointer_input_detector_at(
-        &self,
-        call: &ast::MethodCallExpr,
-        index: usize,
-    ) -> bool {
-        self.method_call_variants(call).any(|call| {
-            self.sema
-                .resolve_method_call(&call)
-                .is_some_and(|function| self.pointer_input_detector_index(function) == Some(index))
-        })
-    }
-
-    fn pointer_input_detector_index(&self, function: Function) -> Option<usize> {
-        if !self.is_render_slot_method(function, MODIFIER_TYPE_PATH)
-            && !self.is_render_slot_method(function, PUBLIC_MODIFIER_TYPE_PATH)
-        {
-            return None;
-        }
-        match function.name(self.db).as_str() {
-            "pointer_input" => Some(1),
-            "pointer_input_once" => Some(0),
-            _ => None,
-        }
     }
 
     fn call_resolves_to(&self, call: &ast::CallExpr, matches: impl Fn(Function) -> bool) -> bool {
@@ -1664,7 +1630,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use super::super::{CheckOptions, types::CallAnalyzer, workspace};
+    use super::super::{CheckOptions, ErrorCode, types::CallAnalyzer, workspace};
 
     #[test]
     fn dependency_components_and_slots_are_indexed_without_unrelated_members() {
@@ -1770,51 +1736,67 @@ fn plain() { foreign_component(); }
     }
 
     #[test]
-    fn pointer_input_detector_closures_are_tessera_colored() {
+    fn pointer_input_detectors_cannot_compose_or_create_remembered_state() {
         with_analyzer(
             r#"
-use tessera_ui::{DownRequirement, Modifier, PointerEventPass, PressKeyEventType};
+use tessera_ui::{DownRequirement, Modifier, PointerEventPass, PressKeyEventType, remember};
 
 #[tessera_ui::tessera]
 fn child() {}
 
-fn plain_modifier() {
-    let _modifier = Modifier::new().pointer_input_once(|mut scope| async move {
+#[tessera_ui::tessera]
+fn host() {
+    let state = remember(|| false);
+    child();
+
+    let _modifier = Modifier::new().pointer_input_once(move |mut scope| async move {
         let _ = scope.await_first_down(
             PointerEventPass::Main,
             Some(PressKeyEventType::Left),
             DownRequirement::Unconsumed,
         ).await;
+        state.set(true);
         child();
     });
-    let _keyed = Modifier::new().pointer_input(1u8, |_| async { child(); });
-    let _qualified = Modifier::pointer_input_once(Modifier::new(), |_| async { child(); });
-    let _qualified_keyed = Modifier::pointer_input(Modifier::new(), 1u8, |_| async { child(); });
-    let _action = Modifier::new().pointer_input_once(|_| async {
-        let action = || action_child();
-        action();
+    let _keyed = Modifier::new().pointer_input(1u8, |_| {
+        let _state = remember(|| false);
+        async {}
     });
-}
-
-#[tessera_ui::tessera]
-fn action_child() {}
-#[tessera_ui::tessera]
-fn unrelated_child() {}
-struct Other;
-impl Other { fn pointer_input_once(&self, _: impl Fn()) {} }
-fn unrelated_method() {
-    Other.pointer_input_once(|| { unrelated_child(); });
+    let _qualified = Modifier::pointer_input_once(Modifier::new(), |_| async { child(); });
+    let _qualified_keyed = Modifier::pointer_input(Modifier::new(), 1u8, |_| async {
+        let _state = remember(|| false);
+    });
 }
 "#,
             |analyzer| {
-                let messages = analyzer
+                let diagnostics: Vec<_> = analyzer
                     .diagnostics
                     .iter()
-                    .map(|diagnostic| diagnostic.message.clone())
-                    .collect::<Vec<_>>();
-                assert_eq!(messages.len(), 2, "{messages:?}");
-                assert_contains(&messages, "action_child");
-                assert_contains(&messages, "unrelated_child");
+                    .map(|d| (d.code, d.message.as_str()))
+                    .collect();
+                let component_call = ErrorCode::ComponentCall.into();
+                let runtime_call = ErrorCode::RuntimeCall.into();
+                assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .filter(
+                            |(code, message)| *code == component_call && message.contains("child")
+                        )
+                        .count(),
+                    2,
+                    "{diagnostics:?}"
+                );
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .filter(
+                            |(code, message)| *code == runtime_call && message.contains("remember")
+                        )
+                        .count(),
+                    2,
+                    "{diagnostics:?}"
+                );
             },
         );
     }
