@@ -98,7 +98,7 @@ programming contract; the guidelines below also govern framework implementation.
   - the build closures of `key` and `provide_context`, and deferred Pending-property materializers;
   - content closures in approved built-in render setters. Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
-- Detector closures passed directly to `Modifier::pointer_input` or `pointer_input_once` are Tessera-colored; their action callbacks remain uncolored.
+- Pointer detectors and their action callbacks are uncolored. Create state in the owning component and capture its handles in the detector.
 - Color is one-way and does not propagate: colored contexts may call uncolored code, but uncolored code, including helpers called from components and closures written inside them, must not call Tessera-colored functions or Tessera-only APIs.
 - `State::new` creates model-owned state and is valid only in model initializers: `ModelInit::init` implementations and closures passed directly to `ModelStore::model`. `cargo tessera check` rejects other calls (T0006); like color, this does not propagate through helpers.
 - Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `launch`, `launch_once`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context.
