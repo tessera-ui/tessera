@@ -96,12 +96,6 @@ pub(super) fn article_tab_focus_visible(
         .is_focus_visible()
 }
 
-pub(super) fn focus_article_tab(navigation: State<ArticleNavigationState>, index: usize) {
-    navigation
-        .with(|value| value.requesters[index])
-        .request_focus();
-}
-
 pub(super) fn article_tab_modifier(
     modifier: Modifier,
     navigation: State<ArticleNavigationState>,

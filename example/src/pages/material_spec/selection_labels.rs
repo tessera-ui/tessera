@@ -21,7 +21,7 @@ use tessera_components::{
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Callback, Dp, FocusRequester, LayoutCoordinates, Modifier, State, accesskit::Role,
+    Callback, Dp, FocusRequester, LayoutCoordinates, Modifier, accesskit::Role,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
