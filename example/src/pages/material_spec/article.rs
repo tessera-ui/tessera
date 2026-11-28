@@ -792,6 +792,7 @@ fn article_tab_strip(
                             navigation,
                             index,
                             Callback::new(move || {
+                                super::article_navigation::focus_article_tab(navigation, index);
                                 selected.set(label);
                                 scroll.with_mut(|scroll| {
                                     scroll.set_scroll_position(PxPosition::ZERO)

@@ -6,8 +6,8 @@
 use std::{collections::BTreeMap, hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Constraint, Dp, FocusScopeNode, LayoutResult, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlotWith, State, key,
+    AxisConstraint, CallbackWith, Constraint, Dp, FocusDirection, FocusScopeNode, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     remember, remember_with_key, tessera,
@@ -841,7 +841,9 @@ fn lazy_list_view(
     if focus_args.with(|args| args != &next_focus) {
         focus_args.set(next_focus);
     }
-    let focus_modifier = lazy_list_focus_beyond_bounds_modifier(focus_args);
+    let focus_modifier = Modifier::new().focus_beyond_bounds_handler(move |direction| {
+        lazy_list_focus_beyond_bounds(focus_args, direction)
+    });
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_item_indices = visible_children
@@ -1367,60 +1369,61 @@ struct LazyListFocusArgs {
     item_spacing: Px,
 }
 
-fn lazy_list_focus_beyond_bounds_modifier(args: State<LazyListFocusArgs>) -> Modifier {
-    Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
-        if !args.is_alive() {
+fn lazy_list_focus_beyond_bounds(
+    args: State<LazyListFocusArgs>,
+    direction: FocusDirection,
+) -> bool {
+    if !args.is_alive() {
+        return false;
+    }
+    let args = args.get();
+    let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
+    let Some(forward) = args.axis.focus_forward(direction) else {
+        return false;
+    };
+    if args.total_count == 0 || args.viewport_span <= Px::ZERO {
+        return false;
+    }
+
+    let target_index = if forward {
+        if args.visible_range.end >= args.total_count {
             return false;
         }
-        let args = args.get();
-        let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
-        let Some(forward) = args.axis.focus_forward(direction) else {
+        args.visible_range.end
+    } else {
+        let Some(index) = args.visible_range.start.checked_sub(1) else {
             return false;
         };
-        if args.total_count == 0 || args.viewport_span <= Px::ZERO {
-            return false;
-        }
+        index
+    };
 
-        let target_index = if forward {
-            if args.visible_range.end >= args.total_count {
-                return false;
-            }
-            args.visible_range.end
-        } else {
-            let Some(index) = args.visible_range.start.checked_sub(1) else {
-                return false;
-            };
-            index
-        };
+    let (target_offset, target_main) = args.controller.with(|c| {
+        (
+            c.cache
+                .offset_for(target_index, args.estimated_item_main, args.item_spacing),
+            c.cache
+                .measurement(target_index)
+                .unwrap_or(args.estimated_item_main),
+        )
+    });
 
-        let (target_offset, target_main) = args.controller.with(|c| {
-            (
-                c.cache
-                    .offset_for(target_index, args.estimated_item_main, args.item_spacing),
-                c.cache
-                    .measurement(target_index)
-                    .unwrap_or(args.estimated_item_main),
-            )
-        });
+    let desired_scroll = if forward {
+        (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+    } else {
+        target_offset
+    }
+    .min(max_scroll);
 
-        let desired_scroll = if forward {
-            (target_offset + target_main - args.viewport_span).max(Px::ZERO)
-        } else {
-            target_offset
-        }
-        .min(max_scroll);
+    if desired_scroll == args.scroll_offset {
+        return false;
+    }
 
-        if desired_scroll == args.scroll_offset {
-            return false;
-        }
-
-        let position = args.axis.scroll_position(desired_scroll);
-        args.scroll_controller
-            .with_mut(|c| c.set_scroll_position(position));
-        args.controller
-            .with_mut(|c| c.scroll.set_scroll_position(position));
-        true
-    }))
+    let position = args.axis.scroll_position(desired_scroll);
+    args.scroll_controller
+        .with_mut(|c| c.set_scroll_position(position));
+    args.controller
+        .with_mut(|c| c.scroll.set_scroll_position(position));
+    true
 }
 
 #[derive(Clone, PartialEq)]

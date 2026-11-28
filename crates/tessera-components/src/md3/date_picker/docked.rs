@@ -98,7 +98,7 @@ pub fn docked_date_picker(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let change = on_date_change.unwrap_or_else(|| CallbackWith::new(|_| {}));
+    let change = on_date_change.unwrap_or_else(CallbackWith::default_value);
     let corner = RoundedCorner::manual(Dp(16.0), 2.0);
     surface()
         .modifier(modifier.unwrap_or_default().width(DATE_PICKER_MAX_WIDTH))

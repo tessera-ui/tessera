@@ -845,8 +845,9 @@ mod tests {
         }
         material_theme().child(move || {
             let probe = probe.clone();
-            let items: Vec<_> = (0..count)
-                .map(|index| FloatingActionButtonMenuItem {
+            let mut items = Vec::with_capacity(count);
+            for index in 0..count {
+                items.push(FloatingActionButtonMenuItem {
                     label: format!("Action {index}"),
                     icon: Some(filled::EDIT_SVG.into()),
                     on_click: if index == 1 {
@@ -854,8 +855,8 @@ mod tests {
                     } else {
                         Some(Callback::new(move || action.set(index + 1)))
                     },
-                })
-                .collect();
+                });
+            }
             boxed()
                 .modifier(Modifier::new().fill_max_size().clip_to_bounds())
                 .children(move || {

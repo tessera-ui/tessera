@@ -410,26 +410,6 @@ fn apply_single_line(value: String) -> String {
     value.replace(['\n', '\r'], "")
 }
 
-fn merge_input_transforms(
-    line_limit: TextFieldLineLimit,
-    input_transform: Option<CallbackWith<String, String>>,
-) -> Option<CallbackWith<String, String>> {
-    let line_transform = match line_limit {
-        TextFieldLineLimit::SingleLine => Some(CallbackWith::new(apply_single_line)),
-        TextFieldLineLimit::MultiLine => None,
-    };
-
-    match (line_transform, input_transform) {
-        (None, None) => None,
-        (Some(transform), None) => Some(transform),
-        (None, Some(transform)) => Some(transform),
-        (Some(line_transform), Some(input_transform)) => Some(CallbackWith::new(move |value| {
-            let value = input_transform.call(value);
-            line_transform.call(value)
-        })),
-    }
-}
-
 fn build_editor_args(
     args: &TextFieldProps,
     input_transform: Option<CallbackWith<String, String>>,
@@ -1582,7 +1562,15 @@ pub fn text_field(
     let enabled = args.enabled;
     let read_only = args.read_only;
     let menu_controller = remember(MenuController::new);
-    let input_transform = merge_input_transforms(args.line_limit, args.input_transform);
+    let input_transform = match (args.line_limit, args.input_transform) {
+        (TextFieldLineLimit::SingleLine, None) => Some(CallbackWith::new(apply_single_line)),
+        (TextFieldLineLimit::SingleLine, Some(transform)) => {
+            Some(CallbackWith::new(move |value| {
+                apply_single_line(transform.call(value))
+            }))
+        }
+        (TextFieldLineLimit::MultiLine, transform) => transform,
+    };
     let display_transform = if let Some(mask) = args.obfuscation_char {
         Some(CallbackWith::new(move |value: String| {
             DisplayTransformText::from_strings(&value, obfuscate_text(&value, mask))

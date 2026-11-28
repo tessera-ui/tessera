@@ -5,33 +5,6 @@ use tessera_ui::{
 
 use super::*;
 
-fn handlers(
-    connection: NestedScrollConnection,
-    inner: bool,
-    observed: TestProbe<Vec<(bool, u8, f32)>>,
-) -> NestedScrollConnection {
-    let pre_scroll = observed.clone();
-    let post_scroll = observed.clone();
-    let pre_fling = observed.clone();
-    connection
-        .with_pre_scroll_handler(CallbackWith::new(move |input: PreScrollInput| {
-            pre_scroll.with_mut(|items| items.push((inner, 0, input.available.y)));
-            ScrollDelta::new(0.0, if inner { 8.0 } else { 6.0 })
-        }))
-        .with_post_scroll_handler(CallbackWith::new(move |input: PostScrollInput| {
-            post_scroll.with_mut(|items| items.push((inner, 1, input.available.y)));
-            ScrollDelta::new(0.0, if inner { 8.0 } else { 6.0 })
-        }))
-        .with_pre_fling_handler(CallbackWith::new(move |input: PreFlingInput| {
-            pre_fling.with_mut(|items| items.push((inner, 2, input.available.y)));
-            ScrollVelocity::new(0.0, if inner { 8.0 } else { 6.0 })
-        }))
-        .with_post_fling_handler(CallbackWith::new(move |available: ScrollVelocity| {
-            observed.with_mut(|items| items.push((inner, 3, available.y)));
-            ScrollVelocity::new(0.0, if inner { 8.0 } else { 6.0 })
-        }))
-}
-
 #[tessera]
 fn connection_fixture(
     connection: TestProbe<Option<NestedScrollConnection>>,
@@ -39,19 +12,34 @@ fn connection_fixture(
 ) {
     let outer_scale = remember(|| 1.0_f32);
     let inner_scale = remember(|| 0.5_f32);
-    let outer = handlers(
-        NestedScrollConnection::new().with_coordinate_scale(outer_scale),
-        false,
-        observed.clone(),
-    );
-    let inner = handlers(
-        NestedScrollConnection::new()
-            .with_coordinate_scale(inner_scale)
-            .with_parent(Some(outer)),
-        true,
-        observed,
-    );
-    connection.set(Some(inner));
+    let mut parent = None;
+    for (inner, scale) in [(false, outer_scale), (true, inner_scale)] {
+        let pre_scroll = observed.clone();
+        let post_scroll = observed.clone();
+        let pre_fling = observed.clone();
+        let post_fling = observed.clone();
+        let next = NestedScrollConnection::new()
+            .with_coordinate_scale(scale)
+            .with_parent(parent)
+            .with_pre_scroll_handler(CallbackWith::new(move |input: PreScrollInput| {
+                pre_scroll.with_mut(|items| items.push((inner, 0, input.available.y)));
+                ScrollDelta::new(0.0, if inner { 8.0 } else { 6.0 })
+            }))
+            .with_post_scroll_handler(CallbackWith::new(move |input: PostScrollInput| {
+                post_scroll.with_mut(|items| items.push((inner, 1, input.available.y)));
+                ScrollDelta::new(0.0, if inner { 8.0 } else { 6.0 })
+            }))
+            .with_pre_fling_handler(CallbackWith::new(move |input: PreFlingInput| {
+                pre_fling.with_mut(|items| items.push((inner, 2, input.available.y)));
+                ScrollVelocity::new(0.0, if inner { 8.0 } else { 6.0 })
+            }))
+            .with_post_fling_handler(CallbackWith::new(move |available: ScrollVelocity| {
+                post_fling.with_mut(|items| items.push((inner, 3, available.y)));
+                ScrollVelocity::new(0.0, if inner { 8.0 } else { 6.0 })
+            }));
+        parent = Some(next);
+    }
+    connection.set(parent);
     tessera_ui::layout::layout(tessera_ui::layout::Stack);
 }
 

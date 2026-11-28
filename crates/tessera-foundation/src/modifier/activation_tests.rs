@@ -136,23 +136,25 @@ fn combined_target(
     interaction: State<InteractionState>,
     requester: FocusRequester,
 ) {
-    layout(Stack).modifier(
-        Modifier::new()
-            .size(Dp(80.0), Dp(80.0))
-            .combined_clickable(CombinedClickableArgs {
-                on_click: click_enabled
-                    .get()
-                    .then(|| Callback::new(move || counts.with_mut(|counts| counts.0 += 1))),
-                on_long_click: Some(Callback::new(move || {
-                    counts.with_mut(|counts| counts.1 += 1)
-                })),
-                enabled: enabled.get(),
-                label: Some("Hold".into()),
-                interaction_state: Some(interaction),
-                focus_requester: Some(requester),
-                ..Default::default()
-            }),
-    );
+    layout(Stack).modifier(Modifier::new().size(Dp(80.0), Dp(80.0)).combined_clickable(
+        CombinedClickableArgs {
+            on_click: if click_enabled.get() {
+                Some(Callback::new(move || {
+                    counts.with_mut(|counts| counts.0 += 1)
+                }))
+            } else {
+                None
+            },
+            on_long_click: Some(Callback::new(move || {
+                counts.with_mut(|counts| counts.1 += 1)
+            })),
+            enabled: enabled.get(),
+            label: Some("Hold".into()),
+            interaction_state: Some(interaction),
+            focus_requester: Some(requester),
+            ..Default::default()
+        },
+    ));
 }
 
 #[test]

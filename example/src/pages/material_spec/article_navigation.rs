@@ -100,7 +100,7 @@ pub(super) fn article_tab_modifier(
     modifier: Modifier,
     navigation: State<ArticleNavigationState>,
     index: usize,
-    on_select: Callback,
+    on_click: Callback,
     interaction: Option<State<InteractionState>>,
 ) -> Modifier {
     let (requester, selected, tab_stop, available) = navigation.with(|value| {
@@ -135,10 +135,7 @@ pub(super) fn article_tab_modifier(
                     .skip_traversal(!tab_stop)
                     .can_focus(available),
             ),
-            on_click: Callback::new(move || {
-                requester.request_focus();
-                on_select.call();
-            }),
+            on_click,
             ..Default::default()
         })
 }
@@ -252,6 +249,7 @@ mod tests {
                                     navigation,
                                     index,
                                     Callback::new(move || {
+                                        focus_article_tab(navigation, index);
                                         selected.set(title);
                                         vertical.with_mut(|scroll| {
                                             scroll.set_scroll_position(PxPosition::ZERO);
@@ -452,7 +450,10 @@ mod tests {
                                         Modifier::new().size(Dp(140.0), Dp(80.0)),
                                         navigation,
                                         index,
-                                        Callback::new(move || selected.set(title)),
+                                        Callback::new(move || {
+                                            focus_article_tab(navigation, index);
+                                            selected.set(title);
+                                        }),
                                         None,
                                     ))
                                     .children(move || {

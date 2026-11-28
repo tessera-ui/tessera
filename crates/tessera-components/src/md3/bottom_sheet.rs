@@ -503,61 +503,54 @@ fn bottom_sheet_drag_handle(
     });
 }
 
-fn build_bottom_sheet_nested_scroll_connection(
+fn bottom_sheet_pre_scroll(
+    controller: State<BottomSheetController>,
+    input: PreScrollInput,
+) -> ScrollDelta {
+    if input.source != tessera_ui::ScrollEventSource::Touch
+        || input.available.y >= 0.0
+        || controller.with(|c| {
+            c.drag_offset() <= 0.0 && (c.resize_fraction() >= 1.0 || c.resize_range.0 <= 0.0)
+        })
+    {
+        return ScrollDelta::ZERO;
+    }
+    let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
+    ScrollDelta::new(0.0, consumed_y)
+}
+
+fn bottom_sheet_post_scroll(
+    controller: State<BottomSheetController>,
+    input: PostScrollInput,
+) -> ScrollDelta {
+    if input.source != tessera_ui::ScrollEventSource::Touch || input.available.y <= 0.0 {
+        return ScrollDelta::ZERO;
+    }
+    let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
+    ScrollDelta::new(0.0, consumed_y)
+}
+
+fn bottom_sheet_pre_fling(
     controller: State<BottomSheetController>,
     on_close: Callback,
-) -> NestedScrollConnection {
-    NestedScrollConnection::new()
-        .with_pre_scroll_handler(CallbackWith::new({
-            move |input: PreScrollInput| {
-                if input.source != tessera_ui::ScrollEventSource::Touch
-                    || input.available.y >= 0.0
-                    || controller.with(|c| {
-                        c.drag_offset() <= 0.0
-                            && (c.resize_fraction() >= 1.0 || c.resize_range.0 <= 0.0)
-                    })
-                {
-                    return ScrollDelta::ZERO;
-                }
-
-                let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
-                ScrollDelta::new(0.0, consumed_y)
-            }
-        }))
-        .with_post_scroll_handler(CallbackWith::new({
-            move |input: PostScrollInput| {
-                if input.source != tessera_ui::ScrollEventSource::Touch || input.available.y <= 0.0
-                {
-                    return ScrollDelta::ZERO;
-                }
-
-                let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
-                ScrollDelta::new(0.0, consumed_y)
-            }
-        }))
-        .with_pre_fling_handler(CallbackWith::new({
-            move |input: PreFlingInput| {
-                if controller.with(|c| !c.is_dragging && c.drag_offset() <= 0.0) {
-                    return ScrollVelocity::ZERO;
-                }
-
-                let resizing =
-                    controller.with(|c| c.resize_range.0 > 0.0 && c.resize_fraction() > 0.0);
-                let should_close = controller.with_mut(|c| c.complete_drag(input.available.y));
-                if should_close {
-                    on_close.call();
-                }
-
-                ScrollVelocity::new(
-                    0.0,
-                    if resizing {
-                        input.available.y
-                    } else {
-                        input.available.y.max(0.0)
-                    },
-                )
-            }
-        }))
+    input: PreFlingInput,
+) -> ScrollVelocity {
+    if controller.with(|c| !c.is_dragging && c.drag_offset() <= 0.0) {
+        return ScrollVelocity::ZERO;
+    }
+    let resizing = controller.with(|c| c.resize_range.0 > 0.0 && c.resize_fraction() > 0.0);
+    let should_close = controller.with_mut(|c| c.complete_drag(input.available.y));
+    if should_close {
+        on_close.call();
+    }
+    ScrollVelocity::new(
+        0.0,
+        if resizing {
+            input.available.y
+        } else {
+            input.available.y.max(0.0)
+        },
+    )
 }
 
 #[tessera]
@@ -686,9 +679,10 @@ pub fn bottom_sheet(
     partial_height: Option<Dp>,
     bottom_sheet_content: Option<RenderSlot>,
 ) {
-    let on_close_request = on_close_request.unwrap_or_else(|| {
-        Callback::new(move || controller.with_mut(BottomSheetController::close))
-    });
+    let on_close_request = match on_close_request {
+        Some(callback) => callback,
+        None => Callback::new(move || controller.with_mut(BottomSheetController::close)),
+    };
     let partial_height = partial_height.filter(|height| height.0.is_finite());
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
     let (is_open, visibility, drag_offset, resize_fraction) =
@@ -741,11 +735,18 @@ pub fn bottom_sheet(
                 .child(move || {
                     modal_scrim(scrim).on_dismiss_optional(is_open.then_some(on_close_request));
 
+                    let connection = NestedScrollConnection::new()
+                        .with_pre_scroll_handler(CallbackWith::new(move |input| {
+                            bottom_sheet_pre_scroll(controller, input)
+                        }))
+                        .with_post_scroll_handler(CallbackWith::new(move |input| {
+                            bottom_sheet_post_scroll(controller, input)
+                        }))
+                        .with_pre_fling_handler(CallbackWith::new(move |input| {
+                            bottom_sheet_pre_fling(controller, on_close_request, input)
+                        }));
                     bottom_sheet_content_wrapper()
-                        .nested_scroll_connection(build_bottom_sheet_nested_scroll_connection(
-                            controller,
-                            on_close_request,
-                        ))
+                        .nested_scroll_connection(connection)
                         .accessibility_label_optional(accessibility_label.clone())
                         .bottom_sheet_content_shared(bottom_sheet_content)
                         .controller(controller)

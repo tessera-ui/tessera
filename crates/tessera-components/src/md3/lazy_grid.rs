@@ -6,8 +6,8 @@
 use std::{hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Dp, LayoutResult, MeasurementError,
-    Modifier, Px, RenderSlotWith, State, key,
+    AxisConstraint, CallbackWith, Color, ComputedData, Dp, FocusDirection, LayoutResult,
+    MeasurementError, Modifier, Px, RenderSlotWith, State, key,
     layout::{LayoutChild, MeasureScope, PlacementResult, PlacementScope},
     modifier::FocusModifierExt as _,
     remember, tessera,
@@ -764,17 +764,19 @@ fn lazy_grid_view(
         return;
     }
 
-    let focus_modifier = lazy_grid_focus_beyond_bounds_modifier(LazyGridFocusArgs {
-        axis,
-        controller,
-        scroll_controller,
-        estimated_line_main,
-        main_axis_spacing,
-        total_main,
-        viewport_span,
-        visible_line_range: visible_plan.line_range.clone(),
-        total_lines: controller.with(|c| c.cache.line_count()),
-    });
+    let focus_modifier = Modifier::new().focus_beyond_bounds_handler(
+        lazy_grid_focus_beyond_bounds(LazyGridFocusArgs {
+            axis,
+            controller,
+            scroll_controller,
+            estimated_line_main,
+            main_axis_spacing,
+            total_main,
+            viewport_span,
+            visible_line_range: visible_plan.line_range.clone(),
+            total_lines: controller.with(|c| c.cache.line_count()),
+        }),
+    );
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_layout_items = visible_plan
@@ -1045,12 +1047,12 @@ struct LazyGridFocusArgs {
     total_lines: usize,
 }
 
-fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
+fn lazy_grid_focus_beyond_bounds(args: LazyGridFocusArgs) -> impl Fn(FocusDirection) -> bool {
     let current_scroll_offset = args
         .axis
         .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
     let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
-    Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+    move |direction| {
         let Some(forward) = args.axis.focus_forward(direction) else {
             return false;
         };
@@ -1102,7 +1104,7 @@ fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
         args.scroll_controller
             .with_mut(|c| c.set_scroll_position(position));
         true
-    }))
+    }
 }
 #[derive(PartialEq, Default)]
 struct LazyGridCache {
