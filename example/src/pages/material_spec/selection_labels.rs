@@ -150,13 +150,10 @@ fn canvas(is_switch: bool) {
         });
 }
 
-fn label_modifier(modifier: Modifier, checked: State<bool>, focus: FocusRequester) -> Modifier {
+fn label_modifier(modifier: Modifier, on_click: Callback) -> Modifier {
     modifier
         .clickable(ClickableArgs {
-            on_click: Callback::new(move || {
-                checked.with_mut(|value| *value = !*value);
-                focus.request_focus();
-            }),
+            on_click,
             ..Default::default()
         })
         .semantics(SemanticsArgs {
@@ -183,8 +180,10 @@ fn extra(index: usize) {
             Modifier::new()
                 .offset(Dp(56.0), top)
                 .size(Dp(340.0), Dp(48.0)),
-            checked,
-            focus,
+            Callback::new(move || {
+                checked.with_mut(|value| *value = !*value);
+                focus.request_focus();
+            }),
         ))
         .children(move || {
             text(I18N.text(label))
@@ -227,8 +226,10 @@ fn setting(index: usize) {
             Modifier::new()
                 .offset(Dp(16.0), top)
                 .size(Dp(312.0), Dp(48.0)),
-            checked,
-            focus,
+            Callback::new(move || {
+                checked.with_mut(|value| *value = !*value);
+                focus.request_focus();
+            }),
         ))
         .children(move || {
             column().children(move || {

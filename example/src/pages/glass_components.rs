@@ -623,11 +623,13 @@ fn glass_lens(
         .ripple_alpha_optional(ripple(Number::RippleAlpha))
         .ripple_strength_optional(ripple(Number::RippleStrength))
         .interactive_optional(INTERACTIONS[values.interaction].1)
-        .on_click_optional(
-            values
-                .click
-                .then(|| Callback::new(move || clicks.set(clicks.get().saturating_add(1)))),
-        )
+        .on_click_optional(if values.click {
+            Some(Callback::new(move || {
+                clicks.set(clicks.get().saturating_add(1))
+            }))
+        } else {
+            None
+        })
         .block_input(values.block_input)
         .accessibility_role_optional(ROLES[values.role].1)
         .accessibility_label_optional(optional_text(editors.label))
