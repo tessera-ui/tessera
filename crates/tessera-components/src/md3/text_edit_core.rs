@@ -3910,94 +3910,92 @@ mod tests {
 
     #[test]
     fn native_ime_edits_preserve_composition_and_selection() {
-        #[tessera_ui::tessera]
-        fn snapshot_contract() {
-            let mut controller = controller_with_text("old");
-            for (selection, composition) in [
-                (8..1, Some(1..8)),
-                (5..8, Some(5..8)),
-                (9..9, None),
-                (8..1, None),
-            ] {
-                let event = winit::event::Ime::TextState(winit::event::ImeTextState {
-                    text: "a😃中z".into(),
-                    selection: selection.clone(),
-                    composition: composition.clone(),
-                });
-                let Some(super::PlannedImeEvent::Edit(plan)) =
-                    controller.plan_ime_event(false, &event)
-                else {
-                    panic!("text snapshot must produce an edit");
-                };
-                let on_change = if controller.text() == "a😃中z" {
-                    CallbackWith::new(|_| {
-                        panic!("selection and composition must not rerun on_change")
-                    })
-                } else {
-                    CallbackWith::identity()
-                };
-                let result = controller.replace_text_range_with_pipeline(
-                    plan.replacement_range.clone(),
-                    &plan.replacement_text,
-                    plan.selection.clone(),
-                    on_change,
-                    None,
-                );
-                controller.commit_ime_edit(&plan, &result);
-                assert_eq!(controller.text(), "a😃中z");
-                assert_eq!(
-                    controller.selection(),
-                    TextSelection {
-                        start: selection.start,
-                        end: selection.end
-                    }
-                );
-                assert_eq!(
-                    controller
-                        .composition()
-                        .map(|composition| composition.range.clone()),
-                    composition
-                );
-            }
-            assert!(
-                controller
-                    .plan_ime_event(false, &winit::event::Ime::Preedit(String::new(), None))
-                    .is_none()
-            );
-            let Some(super::PlannedImeEvent::Edit(plan)) = controller.plan_ime_event(
-                false,
-                &winit::event::Ime::DeleteSurroundingText {
-                    before: 1,
-                    after: 1,
-                },
-            ) else {
-                panic!("surrounding deletion must produce an edit");
+        tessera_ui::testing::UiTest::new()
+            .content(snapshot_contract)
+            .frame();
+    }
+
+    #[tessera_ui::tessera]
+    fn snapshot_contract() {
+        let mut controller = controller_with_text("old");
+        for (selection, composition) in [
+            (8..1, Some(1..8)),
+            (5..8, Some(5..8)),
+            (9..9, None),
+            (8..1, None),
+        ] {
+            let event = winit::event::Ime::TextState(winit::event::ImeTextState {
+                text: "a😃中z".into(),
+                selection: selection.clone(),
+                composition: composition.clone(),
+            });
+            let Some(super::PlannedImeEvent::Edit(plan)) = controller.plan_ime_event(false, &event)
+            else {
+                panic!("text snapshot must produce an edit");
+            };
+            let on_change = if controller.text() == "a😃中z" {
+                CallbackWith::new(|_| panic!("selection and composition must not rerun on_change"))
+            } else {
+                CallbackWith::identity()
             };
             let result = controller.replace_text_range_with_pipeline(
                 plan.replacement_range.clone(),
                 &plan.replacement_text,
                 plan.selection.clone(),
-                CallbackWith::identity(),
+                on_change,
                 None,
             );
             controller.commit_ime_edit(&plan, &result);
-            assert_eq!(controller.text(), "😃中");
-            assert_eq!(controller.selection(), TextSelection { start: 7, end: 0 });
-            assert!(
+            assert_eq!(controller.text(), "a😃中z");
+            assert_eq!(
+                controller.selection(),
+                TextSelection {
+                    start: selection.start,
+                    end: selection.end
+                }
+            );
+            assert_eq!(
                 controller
-                    .plan_ime_event(
-                        false,
-                        &winit::event::Ime::DeleteSurroundingText {
-                            before: 1,
-                            after: 0
-                        }
-                    )
-                    .is_none()
+                    .composition()
+                    .map(|composition| composition.range.clone()),
+                composition
             );
         }
-        tessera_ui::testing::UiTest::new()
-            .content(snapshot_contract)
-            .frame();
+        assert!(
+            controller
+                .plan_ime_event(false, &winit::event::Ime::Preedit(String::new(), None))
+                .is_none()
+        );
+        let Some(super::PlannedImeEvent::Edit(plan)) = controller.plan_ime_event(
+            false,
+            &winit::event::Ime::DeleteSurroundingText {
+                before: 1,
+                after: 1,
+            },
+        ) else {
+            panic!("surrounding deletion must produce an edit");
+        };
+        let result = controller.replace_text_range_with_pipeline(
+            plan.replacement_range.clone(),
+            &plan.replacement_text,
+            plan.selection.clone(),
+            CallbackWith::identity(),
+            None,
+        );
+        controller.commit_ime_edit(&plan, &result);
+        assert_eq!(controller.text(), "😃中");
+        assert_eq!(controller.selection(), TextSelection { start: 7, end: 0 });
+        assert!(
+            controller
+                .plan_ime_event(
+                    false,
+                    &winit::event::Ime::DeleteSurroundingText {
+                        before: 1,
+                        after: 0
+                    }
+                )
+                .is_none()
+        );
     }
 
     fn controller_with_text(text: &str) -> TextEditorController {
