@@ -405,7 +405,7 @@ impl MaterialTheme {
 /// ```
 #[tessera]
 pub fn material_theme(theme: Option<CallbackWith<(), MaterialTheme>>, child: Option<RenderSlot>) {
-    let theme = theme.unwrap_or_else(|| CallbackWith::new(|()| MaterialTheme::default()));
+    let theme = theme.unwrap_or_else(CallbackWith::default_value);
     let child = child.unwrap_or_else(RenderSlot::empty);
     provide_context(theme.call(()), move || child.render());
 }

@@ -107,7 +107,7 @@ pub fn date_picker_day(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    let on_select = on_select.unwrap_or_else(|| CallbackWith::new(|_| {}));
+    let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -242,7 +242,7 @@ pub fn date_picker_year(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    let on_select = on_select.unwrap_or_else(|| CallbackWith::new(|_| {}));
+    let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();

@@ -14,10 +14,9 @@ use tessera_foundation::{
     scroll_physics::{ExponentialInertia, ScrollVelocityTracker as FoundationVelocityTracker},
 };
 use tessera_ui::{
-    AxisConstraint, BuildModifierNode, CallbackWith, Color, ComputedData, Constraint, Dp,
-    LayoutCoordinates, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult,
-    MeasurementError, Modifier, ModifierBuildContext, Px, PxPosition, RenderSlot,
-    ScrollEventSource, State,
+    AxisConstraint, BuildModifierNode, Color, ComputedData, Constraint, Dp, LayoutCoordinates,
+    LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult, MeasurementError,
+    Modifier, ModifierBuildContext, Px, PxPosition, RenderSlot, ScrollEventSource, State,
     focus::FocusRevealRequest,
     launch_once,
     layout::{MeasureScope, Stack, layout},
@@ -1511,7 +1510,7 @@ fn apply_scrollable_focus_reveal_modifier(
     vertical: bool,
     horizontal: bool,
 ) -> Modifier {
-    base.focus_reveal_handler(CallbackWith::new(move |request: FocusRevealRequest| {
+    base.focus_reveal_handler(move |request: FocusRevealRequest| {
         let target = request.local_target_bounds();
         let viewport = request.local_viewport_bounds();
         let (current_position, child_size, visible_size) =
@@ -1551,7 +1550,7 @@ fn apply_scrollable_focus_reveal_modifier(
 
         controller.with_mut(|c| c.set_scroll_position(constrained_position));
         true
-    }))
+    })
 }
 
 fn reveal_axis_position(

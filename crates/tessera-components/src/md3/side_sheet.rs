@@ -250,56 +250,49 @@ fn is_open_direction(delta_x: f32, position: SideSheetPosition) -> bool {
     }
 }
 
-fn build_side_sheet_nested_scroll_connection(
+fn side_sheet_pre_scroll(
     controller: State<SideSheetController>,
-    on_close_request: Callback,
     position: State<SideSheetPosition>,
-    parent: Option<NestedScrollConnection>,
-) -> NestedScrollConnection {
-    NestedScrollConnection::new()
-        .with_pre_scroll_handler(CallbackWith::new({
-            move |input: PreScrollInput| {
-                if input.source != tessera_ui::ScrollEventSource::Touch
-                    || !is_open_direction(input.available.x, position.get())
-                    || controller.with(|c| c.drag_offset()) == 0.0
-                {
-                    return ScrollDelta::ZERO;
-                }
+    input: PreScrollInput,
+) -> ScrollDelta {
+    if input.source != tessera_ui::ScrollEventSource::Touch
+        || !is_open_direction(input.available.x, position.get())
+        || controller.with(|c| c.drag_offset()) == 0.0
+    {
+        return ScrollDelta::ZERO;
+    }
+    let consumed_x = controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
+    ScrollDelta::new(consumed_x, 0.0)
+}
 
-                let consumed_x =
-                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
-                ScrollDelta::new(consumed_x, 0.0)
-            }
-        }))
-        .with_post_scroll_handler(CallbackWith::new({
-            move |input: PostScrollInput| {
-                if input.source != tessera_ui::ScrollEventSource::Touch
-                    || !is_close_direction(input.available.x, position.get())
-                {
-                    return ScrollDelta::ZERO;
-                }
+fn side_sheet_post_scroll(
+    controller: State<SideSheetController>,
+    position: State<SideSheetPosition>,
+    input: PostScrollInput,
+) -> ScrollDelta {
+    if input.source != tessera_ui::ScrollEventSource::Touch
+        || !is_close_direction(input.available.x, position.get())
+    {
+        return ScrollDelta::ZERO;
+    }
+    let consumed_x = controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
+    ScrollDelta::new(consumed_x, 0.0)
+}
 
-                let consumed_x =
-                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
-                ScrollDelta::new(consumed_x, 0.0)
-            }
-        }))
-        .with_pre_fling_handler(CallbackWith::new({
-            move |input: PreFlingInput| {
-                if controller.with(|c| c.drag_offset()) == 0.0 {
-                    return ScrollVelocity::ZERO;
-                }
-
-                let should_close =
-                    controller.with_mut(|c| c.complete_drag(input.available.x, position.get()));
-                if should_close {
-                    on_close_request.call();
-                }
-
-                ScrollVelocity::new(input.available.x, 0.0)
-            }
-        }))
-        .with_parent(parent)
+fn side_sheet_pre_fling(
+    controller: State<SideSheetController>,
+    position: State<SideSheetPosition>,
+    on_close_request: Callback,
+    input: PreFlingInput,
+) -> ScrollVelocity {
+    if controller.with(|c| c.drag_offset()) == 0.0 {
+        return ScrollVelocity::ZERO;
+    }
+    let should_close = controller.with_mut(|c| c.complete_drag(input.available.x, position.get()));
+    if should_close {
+        on_close_request.call();
+    }
+    ScrollVelocity::new(input.available.x, 0.0)
 }
 
 fn place_side_sheet_if_present(
@@ -397,8 +390,10 @@ pub fn modal_side_sheet(
     content_padding: Option<Dp>,
     side_sheet_content: Option<RenderSlot>,
 ) {
-    let on_close_request = on_close_request
-        .unwrap_or_else(|| Callback::new(move || controller.with_mut(SideSheetController::close)));
+    let on_close_request = match on_close_request {
+        Some(callback) => callback,
+        None => Callback::new(move || controller.with_mut(SideSheetController::close)),
+    };
     side_sheet_container(controller)
         .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Modal)
@@ -501,13 +496,18 @@ fn side_sheet_container(
         NestedScrollConnection::nearest()
     };
     let coordinate_scale = remember(|| 1.0_f32);
-    let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
-        controller,
-        on_close_request,
-        current_position,
-        parent_nested_scroll,
-    )
-    .with_coordinate_scale(coordinate_scale);
+    let nested_scroll_connection = NestedScrollConnection::new()
+        .with_pre_scroll_handler(CallbackWith::new(move |input| {
+            side_sheet_pre_scroll(controller, current_position, input)
+        }))
+        .with_post_scroll_handler(CallbackWith::new(move |input| {
+            side_sheet_post_scroll(controller, current_position, input)
+        }))
+        .with_pre_fling_handler(CallbackWith::new(move |input| {
+            side_sheet_pre_fling(controller, current_position, on_close_request, input)
+        }))
+        .with_parent(parent_nested_scroll)
+        .with_coordinate_scale(coordinate_scale);
     let (is_open, visibility, drag_offset) = controller.with(SideSheetController::snapshot);
     let is_animating = controller.with(SideSheetController::is_animating);
     if is_animating {

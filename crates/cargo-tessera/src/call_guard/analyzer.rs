@@ -44,6 +44,8 @@ const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
 const RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::prop::RenderSlotWith";
 const PUBLIC_RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::RenderSlot";
 const PUBLIC_RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::RenderSlotWith";
+const CALLBACK_TYPE_PATH: &str = "tessera_ui::prop::Callback";
+const CALLBACK_WITH_TYPE_PATH: &str = "tessera_ui::prop::CallbackWith";
 const ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::entry_point::EntryPoint";
 const PUBLIC_ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::EntryPoint";
 const REMEMBER_PATH: &str = "tessera_ui::runtime::remember";
@@ -1044,22 +1046,28 @@ impl<'db> CallAnalyzer<'db> {
         let name = function.name(self.db).as_str().to_string();
         match name.as_str() {
             "new" if self.is_entry_point_method(function) => Some(TesseraRuntimeApi::EntryPointNew),
-            "new" if self.is_render_slot_method(function, RENDER_SLOT_TYPE_PATH) => {
+            "new" if self.is_method_of_type(function, CALLBACK_TYPE_PATH) => {
+                Some(TesseraRuntimeApi::CallbackNew)
+            }
+            "new" if self.is_method_of_type(function, CALLBACK_WITH_TYPE_PATH) => {
+                Some(TesseraRuntimeApi::CallbackWithNew)
+            }
+            "new" if self.is_method_of_type(function, RENDER_SLOT_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotNew)
             }
-            "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_TYPE_PATH) => {
+            "new" if self.is_method_of_type(function, PUBLIC_RENDER_SLOT_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotNew)
             }
-            "new" if self.is_render_slot_method(function, RENDER_SLOT_WITH_TYPE_PATH) => {
+            "new" if self.is_method_of_type(function, RENDER_SLOT_WITH_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotWithNew)
             }
-            "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => {
+            "new" if self.is_method_of_type(function, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotWithNew)
             }
             "render"
                 if [RENDER_SLOT_TYPE_PATH, PUBLIC_RENDER_SLOT_TYPE_PATH]
                     .iter()
-                    .any(|path| self.is_render_slot_method(function, path)) =>
+                    .any(|path| self.is_method_of_type(function, path)) =>
             {
                 Some(TesseraRuntimeApi::RenderSlotRender)
             }
@@ -1069,7 +1077,7 @@ impl<'db> CallAnalyzer<'db> {
                     PUBLIC_RENDER_SLOT_WITH_TYPE_PATH,
                 ]
                 .iter()
-                .any(|path| self.is_render_slot_method(function, path)) =>
+                .any(|path| self.is_method_of_type(function, path)) =>
             {
                 Some(TesseraRuntimeApi::RenderSlotWithRender)
             }
@@ -1090,7 +1098,7 @@ impl<'db> CallAnalyzer<'db> {
             .contains_range(source.value.syntax().text_range())
     }
 
-    fn is_render_slot_method(&self, function: Function, expected_type_path: &str) -> bool {
+    fn is_method_of_type(&self, function: Function, expected_type_path: &str) -> bool {
         let Some(assoc_item) = function.as_assoc_item(self.db) else {
             return false;
         };
@@ -1267,7 +1275,7 @@ impl<'db> CallAnalyzer<'db> {
                         matches!(
                             function.name(self.db).as_str(),
                             "append" | "configure_deferred"
-                        ) && self.is_render_slot_method(
+                        ) && self.is_method_of_type(
                             function,
                             "tessera_ui::component_call::ComponentCall",
                         )
@@ -1301,7 +1309,7 @@ impl<'db> CallAnalyzer<'db> {
             function.name(self.db).as_str() == "new"
                 && ["alloc::boxed::Box", "std::boxed::Box"]
                     .iter()
-                    .any(|path| self.is_render_slot_method(function, path))
+                    .any(|path| self.is_method_of_type(function, path))
         })
     }
 
@@ -1310,12 +1318,11 @@ impl<'db> CallAnalyzer<'db> {
             let name = function.name(self.db);
             (name.as_str() == "new"
                 && (self.is_entry_point_method(function)
-                    || self
-                        .is_render_slot_method(function, "tessera_ui::headless::HeadlessRenderer")))
+                    || self.is_method_of_type(function, "tessera_ui::headless::HeadlessRenderer")))
                 || (matches!(
                     name.as_str(),
                     "run" | "run_with_config" | "run_web_with_config"
-                ) && self.is_render_slot_method(function, "tessera_ui::renderer::Renderer"))
+                ) && self.is_method_of_type(function, "tessera_ui::renderer::Renderer"))
         })
     }
 
@@ -1326,7 +1333,7 @@ impl<'db> CallAnalyzer<'db> {
                     .resolve_method_call(&call)
                     .is_some_and(|function| {
                         function.name(self.db).as_str() == "content"
-                            && self.is_render_slot_method(function, "tessera_ui::testing::UiTest")
+                            && self.is_method_of_type(function, "tessera_ui::testing::UiTest")
                     })
             })
     }
@@ -1471,6 +1478,7 @@ impl<'db> CallAnalyzer<'db> {
                 | "use_router"
                 | "key"
         ) || self.index.tessera_function_names.contains(last)
+            || Self::is_callback_constructor_path(path)
             || Self::is_render_slot_constructor_path(path)
             || Self::is_entry_point_constructor_path(path)
             || is_internal_runtime_name(last)
@@ -1478,6 +1486,18 @@ impl<'db> CallAnalyzer<'db> {
 
     fn is_semantically_relevant_unresolved_method(&self, path: &str) -> bool {
         Self::is_render_slot_constructor_path(path) || Self::is_entry_point_constructor_path(path)
+    }
+
+    fn is_callback_constructor_path(path: &str) -> bool {
+        matches!(
+            path,
+            "Callback::new"
+                | "CallbackWith::new"
+                | "tessera_ui::Callback::new"
+                | "tessera_ui::CallbackWith::new"
+                | "tessera_ui::prop::Callback::new"
+                | "tessera_ui::prop::CallbackWith::new"
+        )
     }
 
     fn is_render_slot_constructor_path(path: &str) -> bool {
@@ -2095,6 +2115,39 @@ fn themed() {
                 }
             },
         );
+    }
+
+    #[test]
+    fn callback_constructors_require_a_build_context() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{Callback, CallbackWith as Action};
+
+struct CallbackWith;
+impl CallbackWith {
+    fn new(_: impl Fn(u32)) -> Self { Self }
+}
+
+fn helper() {
+    let _ = Action::<u32>::new(|_| {});
+    let _ = CallbackWith::new(|_| {});
+    Callback::noop().call();
+    let _ = Action::<u32, u32>::identity();
+}
+
+#[tessera_ui::tessera]
+fn root() {
+    let action = Callback::new(|| {
+        Callback::new(|| {}).call();
+    });
+    let _ = Action::<u32>::new(move |_| action.call());
+}
+"#,
+        );
+
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_contains(&diagnostics, "(Callback::new)");
+        assert_contains(&diagnostics, "(CallbackWith::new)");
     }
 
     #[test]

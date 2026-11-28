@@ -6,7 +6,7 @@
 use std::{hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Dp, LayoutResult, MeasurementError,
+    AxisConstraint, Color, ComputedData, Dp, FocusDirection, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, RenderSlotWith, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::FocusModifierExt as _,
@@ -622,8 +622,8 @@ fn lazy_staggered_grid_view(
         return;
     }
 
-    let focus_modifier =
-        lazy_staggered_grid_focus_beyond_bounds_modifier(LazyStaggeredGridFocusArgs {
+    let focus_modifier = Modifier::new().focus_beyond_bounds_handler(
+        lazy_staggered_grid_focus_beyond_bounds(LazyStaggeredGridFocusArgs {
             axis,
             controller,
             scroll_controller,
@@ -632,7 +632,8 @@ fn lazy_staggered_grid_view(
             viewport_span,
             visible_range,
             lane_count,
-        });
+        }),
+    );
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_layout_items = visible_items
@@ -792,12 +793,14 @@ struct LazyStaggeredGridFocusArgs {
     lane_count: usize,
 }
 
-fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocusArgs) -> Modifier {
+fn lazy_staggered_grid_focus_beyond_bounds(
+    args: LazyStaggeredGridFocusArgs,
+) -> impl Fn(FocusDirection) -> bool {
     let current_scroll_offset = args
         .axis
         .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
     let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
-    Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+    move |direction| {
         let Some(forward) = args.axis.focus_forward(direction) else {
             return false;
         };
@@ -838,7 +841,7 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
         args.scroll_controller
             .with_mut(|c| c.set_scroll_position(position));
         true
-    }))
+    }
 }
 
 #[derive(PartialEq)]
